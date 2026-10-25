@@ -1,0 +1,1576 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Agendamiento/slotting | Panel Gerencial</title>
+
+  <!-- Dependencias CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.26.9/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+  <!-- Tres CDNs independientes para XLSX -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Outfit', 'sans-serif'] },
+          colors: {
+            brand: { red: '#E3001B', green: '#009640', orange: '#F37021', dark: '#0B0E14', panel: '#131824' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      --red: #E3001B; --red-dark: #b30015; --green: #009640; --orange: #F37021;
+      --font-body: "Outfit", sans-serif;
+      
+      --bg-main: #0B0E14;
+      --bg-body-gradient: radial-gradient(circle at 10% 20%, rgba(227, 0, 27, 0.08) 0%, transparent 30%), radial-gradient(circle at 90% 80%, rgba(0, 150, 64, 0.06) 0%, transparent 30%);
+      --text-main: #F3F4F6;
+      --text-muted: #9CA3AF;
+      --text-dark: #D1D5DB;
+      --panel-bg: rgba(19, 24, 36, 0.6);
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --panel-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      --card-hover: rgba(255,255,255,0.05);
+      --input-bg: rgba(0,0,0,0.2);
+      --input-border: rgba(255,255,255,0.1);
+      --table-border: rgba(255,255,255,0.04);
+      --table-head-bg: rgba(255,255,255,0.03);
+      --header-bg: rgba(11, 14, 20, 0.8);
+      --sidebar-bg: rgba(11, 14, 20, 0.8);
+      --modal-bg: #131824;
+    }
+
+    [data-theme="light"] {
+      --bg-main: #F3F4F6;
+      --bg-body-gradient: none;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --text-dark: #374151;
+      --panel-bg: rgba(255, 255, 255, 0.8);
+      --panel-border: rgba(0, 0, 0, 0.1);
+      --panel-shadow: 0 4px 20px rgba(0,0,0,0.05);
+      --card-hover: rgba(0, 0, 0, 0.04);
+      --input-bg: #FFFFFF;
+      --input-border: #D1D5DB;
+      --table-border: #E5E7EB;
+      --table-head-bg: #F9FAFB;
+      --header-bg: rgba(255, 255, 255, 0.9);
+      --sidebar-bg: rgba(249, 250, 251, 0.9);
+      --modal-bg: #FFFFFF;
+    }
+
+    [data-theme="gray"] {
+      --bg-main: #374151;
+      --bg-body-gradient: radial-gradient(circle at 10% 20%, rgba(255, 255, 255, 0.05) 0%, transparent 30%);
+      --text-main: #F9FAFB;
+      --text-muted: #9CA3AF;
+      --text-dark: #E5E7EB;
+      --panel-bg: rgba(55, 65, 81, 0.6);
+      --panel-border: rgba(255, 255, 255, 0.1);
+      --panel-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      --card-hover: rgba(255, 255, 255, 0.08);
+      --input-bg: rgba(17, 24, 39, 0.4);
+      --input-border: rgba(255, 255, 255, 0.1);
+      --table-border: rgba(255, 255, 255, 0.1);
+      --table-head-bg: rgba(255, 255, 255, 0.05);
+      --header-bg: rgba(55, 65, 81, 0.8);
+      --sidebar-bg: rgba(55, 65, 81, 0.8);
+      --modal-bg: #374151;
+    }
+
+    html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+    body { 
+      margin: 0; background-color: var(--bg-main); color: var(--text-main); font-family: var(--font-body);
+      background-image: var(--bg-body-gradient);
+      background-attachment: fixed; transition: background-color 0.3s, color 0.3s;
+    }
+    h1, h2, h3 { font-weight: 700; letter-spacing: -0.02em; }
+    button, input, select, textarea { font: inherit; }
+    button { transition: all .2s cubic-bezier(0.4, 0, 0.2, 1); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    :focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+
+    .glass-panel { 
+      background: var(--panel-bg); backdrop-filter: blur(16px); 
+      border: 1px solid var(--panel-border); border-radius: 16px; 
+      box-shadow: var(--panel-shadow); transition: background-color 0.3s, border-color 0.3s; 
+    }
+    
+    .btn-primary { background: var(--red); color: white; box-shadow: 0 0 15px rgba(227, 0, 27, 0.4); }
+    .btn-primary:hover { background: #ff0022; box-shadow: 0 0 25px rgba(227, 0, 27, 0.6); transform: translateY(-1px); }
+    .btn-success { background: var(--green); color: white; box-shadow: 0 0 15px rgba(0, 150, 64, 0.3); }
+    .btn-success:hover { background: #00b34d; box-shadow: 0 0 25px rgba(0, 150, 64, 0.5); transform: translateY(-1px); }
+    
+    .btn-white { background: var(--card-hover); color: var(--text-dark); border: 1px solid var(--input-border); }
+    .btn-white:hover { background: var(--input-bg); color: var(--text-main); border-color: var(--text-muted); }
+
+    .field { 
+      width: 100%; min-height: 40px; padding: 8px 12px; 
+      border: 1px solid var(--input-border); border-radius: 8px; 
+      background: var(--input-bg); color: var(--text-main); transition: border-color 0.2s; font-size: 0.95rem;
+    }
+    .field:focus { outline: none; border-color: var(--orange); box-shadow: 0 0 0 3px rgba(243, 112, 33, 0.2); }
+    .field option { background: var(--bg-main); color: var(--text-main); }
+
+    /* Ajustes de tabla para ocupar mejor el espacio */
+    th, td { padding: 12px 16px; text-align: left; font-size: 0.95rem; }
+    th { color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; background: var(--table-head-bg); font-weight: 800; }
+    tbody tr { border-top: 1px solid var(--table-border); transition: background 0.2s; }
+    tbody tr:hover { background: var(--card-hover); }
+    
+    .chart-wrap { height: 250px; position: relative; }
+    dialog::backdrop { background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
+    dialog { max-height: 90vh; overflow-y: auto; background: var(--modal-bg); color: var(--text-main); border: 1px solid var(--panel-border); transition: background-color 0.3s; }
+    .check { width: 18px; height: 18px; accent-color: var(--red); cursor: pointer; }
+
+    .brand-mark { font-weight: 800; letter-spacing: -1px; text-transform: uppercase; }
+    .brand-mark span { color: var(--red); text-shadow: 0 0 15px rgba(227, 0, 27, 0.5); }
+
+    .app-sidebar { background: var(--sidebar-bg); backdrop-filter: blur(20px); border-right: 1px solid var(--panel-border); transition: background-color 0.3s; }
+    .app-sidebar .nav-link { color: var(--text-muted); border-radius: 10px; transition: all 0.2s; font-size: 0.95rem; }
+    .app-sidebar .nav-link:hover { background: var(--card-hover); color: var(--text-main); }
+    .app-sidebar .nav-link.active { background: linear-gradient(90deg, rgba(227, 0, 27, 0.15) 0%, transparent 100%); color: var(--text-main); border-left: 3px solid var(--red); box-shadow: inset 20px 0 20px -20px rgba(227,0,27,0.3); }
+    
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 4px; opacity: 0.3; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-dark); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    const STATES = ["Pendiente", "En Proceso", "Resuelta"];
+    const SUPPLIER_REASONS = ["No generó su cita", "Cita tardía", "Por límite cubierto"];
+    const USER = "Xiomara";
+    const STORAGE_KEY = "slotting_corporativo_v7";
+    const HISTORY_KEY = "slotting_dashboards_history";
+    const EXCEL_HISTORY_KEY = "slotting_excel_history";
+
+    const VIEWS = {
+      resumen: { title: "Resumen Ejecutivo", subtitle: "Visión consolidada del desempeño operativo de todas las áreas.", icon: "trending" },
+      master: { title: "Datos Maestros", subtitle: "Control y seguimiento de incidencias de información de productos.", icon: "database" },
+      suppliers: { title: "Agendamiento / Proveedores", subtitle: "Seguimiento de citas, proveedores e incidencias de recepción.", icon: "calendar" },
+      dashboardCitas: { title: "Dashboard de Citas", subtitle: "Visualización gráfica de la agenda de citas desde Excel.", icon: "chart" },
+      citas: { title: "Mis Reportes de Cita", subtitle: "Indicadores semanales y ranking de proveedores.", icon: "clipboard" },
+      packs: { title: "Cambios de Master Pack", subtitle: "Historial de actualizaciones de unidades por empaque.", icon: "box" }
+    };
+
+    function toDate(value) {
+      if (!value) return null;
+      if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+      if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        const [y, m, d] = value.split("-").map(Number); return new Date(y, m - 1, d);
+      }
+      const d = new Date(value); return isNaN(d.getTime()) ? null : d;
+    }
+
+    function parseExcelDate(val) {
+      if (!val && val !== 0) return dateKey();
+      if (typeof val === 'number' && window.XLSX) {
+        const d = window.XLSX.SSF.parse_date_code(val);
+        if (d) return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+      }
+      const str = String(val).trim();
+      const matchDMY = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (matchDMY) return `${matchDMY[3]}-${matchDMY[2].padStart(2, '0')}-${matchDMY[1].padStart(2, '0')}`;
+      const matchYMD = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+      if (matchYMD) return `${matchYMD[1]}-${matchYMD[2].padStart(2, '0')}-${matchYMD[3].padStart(2, '0')}`;
+      const parsed = new Date(str);
+      return !isNaN(parsed.getTime()) ? dateKey(parsed) : dateKey();
+    }
+
+    function dateKey(value = new Date()) {
+      if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+      const d = toDate(value) || new Date();
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    }
+
+    function formatDate(value) {
+      const d = toDate(value);
+      return d ? d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
+    }
+
+    // NUEVO: Función para calcular el rango de la semana actual (Lunes a Domingo)
+    function getWeekRange(date = new Date()) {
+      const d = new Date(date);
+      const day = d.getDay() === 0 ? 7 : d.getDay(); // 1 = Lunes, 7 = Domingo
+      const diff = d.getDate() - day + 1;
+      const start = new Date(d.setDate(diff));
+      start.setHours(0,0,0,0);
+      
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      end.setHours(23,59,59,999);
+      
+      return { start, end };
+    }
+
+    function uid(prefix) { return `${prefix}-${window.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2)}`; }
+    function hoursAgo(hours) { return new Date(Date.now() - hours * 3600000).toISOString(); }
+    
+    function elapsedDays(row, now) {
+      const start = toDate(row.createdAt);
+      if (!start) return 0;
+      const end = toDate(row.status === "Resuelta" && row.resolvedAt ? row.resolvedAt : now) || new Date();
+      return Math.max(0, Math.round((end - start) / 86400000));
+    }
+    
+    function elapsedText(row, now) {
+      const days = elapsedDays(row, now);
+      return days === 0 ? "Mismo día" : `${days} día${days === 1 ? "" : "s"}`;
+    }
+
+    function mockData() {
+      return {
+        master: [ { id: "DM-001", createdAt: hoursAgo(2), sku: "100245", description: "Paracetamol 500 mg", reason: "Error de EAN", status: "Pendiente", resolvedAt: null } ],
+        suppliers: [ { id: "AG-001", createdAt: hoursAgo(10), supplier: "Laboratorios Portugal", reason: "No generó su cita", observations: "Sin respuesta del proveedor", status: "Pendiente", resolvedAt: null } ],
+        citas: [ { id: "RC-001", createdAt: hoursAgo(2), supplier: "Laboratorios Portugal", appointmentDate: dateKey(new Date(Date.now() - 86400000)), reportType: "Faltante de mercadería", description: "Faltaron 2 cajas de paracetamol en la descarga.", status: "Pendiente", resolvedAt: null } ],
+        packs: [ { id: "MP-001", sku: "100245", description: "Paracetamol 500 mg", oldMP: 12, newMP: 24, date: dateKey(), user: "Xiomara", proceeded: "Sí", status: "Resuelta", resolvedAt: dateKey() } ]
+      };
+    }
+
+    function loadData() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (saved && ["master","suppliers","citas","packs"].every(k => Array.isArray(saved[k]))) return saved;
+      } catch {}
+      return mockData();
+    }
+
+    function loadHistory() {
+      try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || {}; } catch { return {}; }
+    }
+
+    function loadExcelHistory() {
+      try { return JSON.parse(localStorage.getItem(EXCEL_HISTORY_KEY)) || []; } catch { return []; }
+    }
+
+    function Icon({ name, size = 20 }) {
+      const paths = {
+        database: <><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 4 16 4 16 0V5M4 12v7c0 4 16 4 16 0v-7"/></>,
+        trending: <><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></>,
+        calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18M8 15h2M14 15h2"/></>,
+        chart: <><path d="M3 3v18h18"/><path d="M7 16h2V9H7v7Zm4 0h2V5h-2v11Zm4 0h2v-4h-2v4Z"/></>,
+        clipboard: <><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14h6M9 18h6M9 10h6"/></>,
+        box: <><path d="m12 3 9 5-9 5-9-5 9-5ZM3 8v9l9 5 9-5V8M12 13v9M7.5 5.5l9 5"/></>,
+        download: <path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>,
+        upload: <path d="M12 16V4m-5 5 5-5 5 5M4 20h16"/>,
+        plus: <path d="M12 5v14M5 12h14"/>,
+        logout: <path d="M9 4H4v16h5M14 8l4 4-4 4M8 12h10"/>,
+        user: <><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></>,
+        shield: <><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/></>,
+        search: <><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></>,
+        trash: <><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/><path d="M10 11v6M14 11v6"/></>,
+        save: <><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>,
+        refresh: <><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.85.8 6.75 2.15M21 3v6h-6"/></>,
+        palette: <><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></>,
+        file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>
+      };
+      return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{paths[name] || paths.box}</svg>;
+    }
+
+    function Badge({ status }) {
+      const styles = { 
+        "Pendiente": "bg-[#F37021]/10 text-[#F37021] border border-[#F37021]/20 shadow-[0_0_10px_rgba(243,112,33,0.1)]", 
+        "En Proceso": "bg-blue-500/10 text-blue-400 border border-blue-500/20", 
+        "Resuelta": "bg-[#009640]/10 text-[#009640] border border-[#009640]/20 shadow-[0_0_10px_rgba(0,150,64,0.1)]" 
+      };
+      return <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wide ${styles[status] || "bg-gray-500/20 text-gray-400"}`}>{status.toUpperCase()}</span>;
+    }
+
+    function GaugeCard({ label, value, max, color, icon }) {
+      const radius = 50; const circumference = Math.PI * radius;
+      const percent = max > 0 ? Math.min(1, value / max) : 0;
+      const strokeDashoffset = circumference - (percent * circumference);
+      
+      const glowColor = color === "#E3001B" ? "rgba(227, 0, 27, 0.4)" : 
+                        color === "#009640" ? "rgba(0, 150, 64, 0.4)" : 
+                        color === "#F37021" ? "rgba(243, 112, 33, 0.4)" : "rgba(255, 255, 255, 0.2)";
+
+      return (
+        <article className="glass-panel p-5 flex flex-col items-center relative overflow-hidden group hover:border-white/20 transition-all duration-300">
+          <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: color, boxShadow: `0 0 15px ${color}` }}></div>
+          <div className="flex items-center gap-2 mb-2 w-full justify-center">
+            <span className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white transition-transform group-hover:scale-110" style={{ backgroundColor: color, boxShadow: `0 0 15px ${glowColor}` }}>{icon}</span>
+            <p className="text-sm font-semibold text-[var(--text-muted)]">{label}</p>
+          </div>
+          <div className="relative w-40 h-20 flex items-end justify-center mt-2">
+            <svg viewBox="0 0 120 70" className="w-full h-full drop-shadow-lg">
+              <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="var(--table-border)" strokeWidth="14" strokeLinecap="round"/>
+              <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke={color} strokeWidth="14" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} className="transition-all duration-1000 ease-out" style={{ filter: `drop-shadow(0 0 6px ${glowColor})` }}/>
+            </svg>
+            <div className="absolute bottom-0 flex flex-col items-center"><span className="text-4xl font-black text-[var(--text-main)]" style={{ textShadow: `0 0 20px ${glowColor}` }}>{value}</span></div>
+          </div>
+          <p className="text-[10px] text-[var(--text-muted)] mt-3 font-bold uppercase tracking-widest">Registros</p>
+        </article>
+      );
+    }
+
+    function ExecutiveSummary({ summary }) {
+      const chartRef = useRef(null);
+
+      useEffect(() => {
+        if (!window.Chart || !chartRef.current) return;
+        if (Chart.getChart(chartRef.current)) Chart.getChart(chartRef.current).destroy();
+        
+        const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--table-border').trim();
+        const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim();
+        
+        Chart.defaults.color = textColor;
+        Chart.defaults.font.family = "'Outfit', sans-serif";
+        Chart.defaults.font.size = 12;
+        
+        const chart = new Chart(chartRef.current.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: summary.areas.map(a => a.name),
+            datasets: [
+              { label: 'Pendiente', data: summary.areas.map(a => a.pendientes), backgroundColor: '#F37021', borderRadius: 4, borderWidth: 0 },
+              { label: 'En Proceso', data: summary.areas.map(a => a.proceso), backgroundColor: '#3B82F6', borderRadius: 4, borderWidth: 0 },
+              { label: 'Resuelta', data: summary.areas.map(a => a.resueltas), backgroundColor: '#009640', borderRadius: 4, borderWidth: 0 }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15, font: { size: 12, weight: '600' } } } },
+            scales: { x: { grid: { display: false, drawBorder: false } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: gridColor, drawBorder: false } } }
+          }
+        });
+        return () => chart.destroy();
+      }, [summary]);
+
+      const topArea = [...summary.areas].sort((a, b) => b.pendientes - a.pendientes)[0];
+
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { label: "Pendientes globales", value: summary.pending, color: "text-[#F37021]" },
+              { label: "En proceso globales", value: summary.processing, color: "text-blue-500" },
+              { label: "Resueltas hoy", value: summary.resolvedToday, color: "text-[#009640]" },
+              { label: "Críticas +1 día", value: summary.critical, color: "text-[#E3001B]" }
+            ].map(k => (
+              <div key={k.label} className="glass-panel p-5 text-center group hover:bg-[var(--card-hover)] transition duration-300">
+                <p className="text-[11px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">{k.label}</p>
+                <p className={`text-4xl font-black ${k.color} group-hover:scale-110 transition-transform duration-300`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <section className="glass-panel p-5">
+            <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
+              <div>
+                <h2 className="text-xl font-bold text-[var(--text-main)]">Carga operativa por área</h2>
+                <p className="text-sm text-[var(--text-muted)] mt-1">Comparativo de estados entre Datos Maestros, Proveedores y Citas.</p>
+              </div>
+              {topArea && topArea.pendientes > 0 && (
+                <span className="bg-[#F37021]/10 border border-[#F37021]/20 text-[#F37021] text-xs font-bold px-3 py-1.5 rounded-lg shadow-[0_0_15px_rgba(243,112,33,0.15)]">
+                  Mayor atención: {topArea.name} ({topArea.pendientes} pend.)
+                </span>
+              )}
+            </div>
+            <div className="chart-wrap" style={{ height: 250 }}>
+              <canvas ref={chartRef}></canvas>
+            </div>
+          </section>
+
+          <section className="glass-panel p-5 flex justify-between items-center flex-wrap gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-[var(--text-main)]">Cambios de Master Pack</h2>
+              <p className="text-sm text-[var(--text-muted)] mt-1">{summary.packsToday} cambio{summary.packsToday === 1 ? "" : "s"} registrado{summary.packsToday === 1 ? "" : "s"} hoy.</p>
+            </div>
+            <span className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 text-xs font-bold px-3 py-1.5 rounded-lg">{summary.totalPacks} cambios históricos</span>
+          </section>
+        </div>
+      );
+    }
+
+    function supplierKey(value) {
+      return String(value ?? "").trim().replace(/\s+/g, " ").toLocaleUpperCase("es-PE");
+    }
+
+    // ACTUALIZADO: Filtra las métricas para que solo tomen en cuenta la SEMANA ACTUAL
+    function historicalMetrics(dashboardHistory) {
+      const { start, end } = getWeekRange();
+      
+      const reports = Object.values(dashboardHistory || {})
+        .filter(r => r && typeof r === "object")
+        .filter(r => {
+          if (!r.fecha) return false;
+          const [d, m, y] = r.fecha.split('-').map(Number);
+          const reportDate = new Date(y, m - 1, d);
+          return reportDate >= start && reportDate <= end;
+        });
+
+      const numeric = value => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+      const providers = new Map();
+      let totalCitas = 0, totalLpns = 0;
+      
+      const overThreeByDay = [];
+
+      reports.forEach(report => {
+        totalCitas += numeric(report.totalCitas);
+        totalLpns += numeric(report.totalLpns);
+        const ranking = Array.isArray(report.rankingCompleto) ? report.rankingCompleto : (Array.isArray(report.ranking) ? report.ranking : []);
+        
+        const dailyOverThree = [];
+
+        ranking.forEach(row => {
+          const key = supplierKey(row?.proveedor);
+          if (!key) return;
+          
+          const citas = numeric(row.citas);
+          const current = providers.get(key) || { proveedor: String(row.proveedor).trim(), citas: 0 };
+          current.citas += citas;
+          providers.set(key, current);
+
+          if (citas > 3) {
+            dailyOverThree.push({ proveedor: String(row.proveedor).trim(), citas });
+          }
+        });
+
+        if (dailyOverThree.length > 0) {
+          overThreeByDay.push({ 
+            date: report.fecha, 
+            providers: dailyOverThree.sort((a,b) => b.citas - a.citas) 
+          });
+        }
+      });
+
+      overThreeByDay.sort((a, b) => {
+        const [d1, m1, y1] = a.date.split('-');
+        const [d2, m2, y2] = b.date.split('-');
+        return new Date(y2, m2-1, d2) - new Date(y1, m1-1, d1);
+      });
+
+      const sorted = [...providers.values()].sort((a, b) => b.citas - a.citas);
+      const topProvider = sorted[0] || null;
+
+      return {
+        totalCitas, totalLpns: Math.round(totalLpns), days: reports.length,
+        uniqueProviders: providers.size, topProvider,
+        overThreeByDay, 
+        ranking: sorted.slice(0, 10)
+      };
+    }
+
+    function CitasAnalytics({ dashboardHistory }) {
+      const rankingRef = useRef(null);
+      const metrics = useMemo(() => historicalMetrics(dashboardHistory), [dashboardHistory]);
+
+      useEffect(() => {
+        if (!window.Chart || !rankingRef.current || !metrics.ranking.length) return;
+        window.Chart.getChart(rankingRef.current)?.destroy();
+        
+        const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--table-border').trim();
+        const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim();
+
+        Chart.defaults.color = textColor;
+        Chart.defaults.font.family = "'Outfit', sans-serif";
+        Chart.defaults.font.size = 12;
+
+        const chart = new window.Chart(rankingRef.current, {
+          type: "bar",
+          data: {
+            labels: metrics.ranking.map(row => row.proveedor),
+            datasets: [{ label: "Citas acumuladas", data: metrics.ranking.map(row => row.citas), backgroundColor: "#E3001B", borderRadius: 4, maxBarThickness: 24 }]
+          },
+          options: {
+            indexAxis: "y", responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: "Citas acumuladas", font: {size: 12} }, grid: { color: gridColor, drawBorder: false } },
+              y: { grid: { display: false }, ticks: { color: textColor, font: { size: 11, weight: "600" } } }
+            }
+          }
+        });
+        return () => chart.destroy();
+      }, [metrics]);
+
+      return <div className="space-y-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: "Top Proveedor", value: metrics.topProvider ? metrics.topProvider.proveedor : "—", color: "text-[#F37021]", isText: true },
+            { label: "Citas del Top", value: metrics.topProvider ? metrics.topProvider.citas : 0, color: "text-[#009640]" },
+            { label: "Días con > 3 Citas", value: metrics.overThreeByDay.length, color: "text-[#E3001B]" },
+            { label: "Días Analizados", value: metrics.days, color: "text-blue-500" }
+          ].map(kpi => <article key={kpi.label} className="glass-panel p-5 text-center hover:bg-[var(--card-hover)] transition">
+            <p className="text-[11px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">{kpi.label}</p>
+            <p className={`font-black ${kpi.isText ? 'text-xl md:text-2xl' : 'text-4xl'} ${kpi.color}`}>
+              {typeof kpi.value === 'number' ? kpi.value.toLocaleString("es-PE") : kpi.value}
+            </p>
+          </article>)}
+        </div>
+        
+        <section className="glass-panel p-5">
+          <h2 className="text-xl font-bold text-[var(--text-main)]">Top 10 de proveedores · Citas acumuladas</h2>
+          <p className="text-sm text-[var(--text-muted)] mt-1 mb-4">Suma de citas solicitadas de todos los reportes de la <strong>semana actual</strong>.</p>
+          {!metrics.days ? <p className="py-10 text-center text-[var(--text-muted)] text-sm">No hay reportes guardados esta semana. Carga un Excel en Dashboard de Citas.</p>
+            : !metrics.ranking.length ? <p className="py-10 text-center text-[var(--text-muted)] text-sm">Los reportes no contienen datos para el ranking.</p>
+            : !window.Chart ? <p className="py-10 text-center text-[var(--text-muted)] text-sm">No se pudo cargar Chart.js.</p>
+            : <div className="chart-wrap" style={{ height: Math.max(250, metrics.ranking.length * 35 + 40) }}>
+                <canvas ref={rankingRef} role="img" aria-label="Top 10 de proveedores por citas acumuladas"></canvas>
+              </div>}
+        </section>
+
+        <section className="glass-panel p-5">
+          <h2 className="text-xl font-bold text-[var(--text-main)]">Proveedores con más de 3 citas por día</h2>
+          <p className="text-sm text-[var(--text-muted)] mt-1 mb-4">Listado de proveedores que superaron las 3 citas en un día de la <strong>semana actual</strong>.</p>
+          
+          {!metrics.days ? (
+            <p className="py-6 text-center text-[var(--text-muted)] text-sm">No hay datos disponibles.</p>
+          ) : metrics.overThreeByDay.length === 0 ? (
+            <p className="py-6 text-center text-[var(--text-muted)] text-sm">Ningún proveedor superó las 3 citas en un solo día.</p>
+          ) : (
+            <div className="space-y-3">
+              {metrics.overThreeByDay.map((dayData, idx) => (
+                <div key={idx} className="border border-[var(--panel-border)] rounded-xl bg-[var(--input-bg)] overflow-hidden">
+                  <div className="bg-[var(--table-head-bg)] px-4 py-2.5 border-b border-[var(--panel-border)] flex justify-between items-center">
+                    <span className="font-bold text-[var(--text-main)] text-base">Fecha: {dayData.date}</span>
+                    <span className="text-xs font-bold text-[#F37021] bg-[#F37021]/10 px-2 py-1 rounded">{dayData.providers.length} proveedores</span>
+                  </div>
+                  <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                    {dayData.providers.map((p, i) => (
+                      <div key={i} className="flex justify-between items-center p-2.5 rounded-lg border border-[var(--panel-border)] bg-[var(--card-hover)] shadow-sm">
+                        <span className="font-semibold text-[var(--text-dark)] text-sm truncate pr-2" title={p.proveedor}>{p.proveedor}</span>
+                        <span className="px-2.5 py-0.5 rounded-full bg-[#E3001B]/10 text-[#E3001B] font-bold text-xs border border-[#E3001B]/20 whitespace-nowrap">
+                          {p.citas} citas
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>;
+    }
+
+    function CitasDashboard({ data, onUpload, history, onSaveHistory, onLoadHistory, onDeleteHistory }) {
+      const rankingRef = useRef(null);
+      const pieRef = useRef(null);
+      const fileInputRef = useRef(null);
+      const [showHistoryList, setShowHistoryList] = useState(false);
+
+      useEffect(() => {
+        if (!data || !window.Chart || showHistoryList) return;
+
+        if (rankingRef.current && Chart.getChart(rankingRef.current)) Chart.getChart(rankingRef.current).destroy();
+        if (pieRef.current && Chart.getChart(pieRef.current)) Chart.getChart(pieRef.current).destroy();
+        
+        const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--table-border').trim();
+        const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim();
+
+        Chart.defaults.color = textColor;
+        Chart.defaults.font.family = "'Outfit', sans-serif";
+        Chart.defaults.font.size = 12;
+
+        const ctxRanking = rankingRef.current.getContext('2d');
+        const rankingChart = new Chart(ctxRanking, {
+          type: 'bar',
+          data: { labels: data.ranking.map(r => r.proveedor), datasets: [{ label: 'Citas', data: data.ranking.map(r => r.citas), backgroundColor: '#E3001B', borderRadius: 4, barThickness: 16 }] },
+          options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: gridColor, drawBorder: false } }, y: { grid: { display: false }, ticks: { font: { size: 11, weight: '600' }, color: textColor } } } }
+        });
+
+        const ctxPie = pieRef.current.getContext('2d');
+        const pieChart = new Chart(ctxPie, {
+          type: 'doughnut',
+          data: { labels: ['AGENDADO', 'PENDIENTE'], datasets: [{ data: [data.atendidos.agendados, data.atendidos.pendientes], backgroundColor: ['#009640', '#F37021'], borderWidth: 0, hoverOffset: 10 }] },
+          options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15, font: { size: 12, weight: '600' } } } } }
+        });
+
+        return () => { rankingChart.destroy(); pieChart.destroy(); };
+      }, [data, showHistoryList]);
+
+      if (showHistoryList) {
+        return (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center glass-panel p-4 flex-wrap gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-[var(--text-main)]">Historial de Dashboards</h2>
+                <p className="text-sm text-[var(--text-muted)]">Selecciona un reporte guardado para visualizarlo.</p>
+              </div>
+              <button onClick={() => setShowHistoryList(false)} className="btn-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">Volver al Dashboard</button>
+            </div>
+            {Object.keys(history).length === 0 ? (
+              <div className="text-center py-16 glass-panel border-dashed border-2 border-[var(--panel-border)]"><p className="text-base text-[var(--text-muted)]">No hay reportes guardados.</p></div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Object.entries(history).sort().reverse().map(([date, d]) => (
+                  <div key={date} className="glass-panel p-5 flex flex-col justify-between hover:bg-[var(--card-hover)] transition">
+                    <div>
+                      <div className="flex justify-between items-start mb-4">
+                        <h3 className="font-bold text-lg text-[var(--text-main)]">Agenda {date}</h3>
+                        <span className="bg-[var(--card-hover)] text-[var(--text-muted)] text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider">Guardado</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mb-4">
+                        <div className="bg-[var(--input-bg)] p-3 rounded-xl border border-[var(--panel-border)]"><p className="text-[10px] text-[var(--text-muted)] uppercase font-bold">Citas</p><p className="text-xl font-black text-[#009640]">{d.totalCitas}</p></div>
+                        <div className="bg-[var(--input-bg)] p-3 rounded-xl border border-[var(--panel-border)]"><p className="text-[10px] text-[var(--text-muted)] uppercase font-bold">Pendientes</p><p className="text-xl font-black text-[#F37021]">{d.pendientesCount}</p></div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => { onLoadHistory(date); setShowHistoryList(false); }} className="flex-1 btn-primary py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"><Icon name="chart" size={16}/> Ver Dashboard</button>
+                      <button onClick={() => { if(confirm("¿Eliminar este reporte guardado?")) onDeleteHistory(date); }} className="bg-[var(--card-hover)] border border-[var(--panel-border)] px-3 py-2 rounded-xl text-[#E3001B] hover:bg-[#E3001B]/20 transition"><Icon name="trash" size={18}/></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      if (!data) {
+        return (
+          <div className="flex flex-col items-center justify-center p-12 glass-panel border-dashed border-2 border-[var(--panel-border)]">
+            <div className="w-20 h-20 bg-[#E3001B]/10 text-[#E3001B] rounded-full flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(227,0,27,0.2)]"><Icon name="upload" size={40} /></div>
+            <h3 className="text-2xl font-bold text-[var(--text-main)] mb-2">Sube tu archivo de Agenda</h3>
+            <p className="text-sm text-[var(--text-muted)] text-center mb-6 max-w-md">Selecciona el archivo Excel (DIA 1 ... .xlsx) para generar automáticamente el dashboard interactivo.</p>
+            <div className="flex gap-3">
+              <input type="file" ref={fileInputRef} onChange={onUpload} accept=".xlsx, .xls" className="hidden" />
+              <button onClick={() => fileInputRef.current?.click()} className="btn-primary px-6 py-2.5 rounded-xl text-base font-bold flex items-center gap-2"><Icon name="upload" size={20} /> Cargar Excel</button>
+              {Object.keys(history).length > 0 && (<button onClick={() => setShowHistoryList(true)} className="btn-white px-6 py-2.5 rounded-xl text-base font-bold flex items-center gap-2"><Icon name="clipboard" size={20} /> Historial ({Object.keys(history).length})</button>)}
+            </div>
+          </div>
+        );
+      }
+
+      const LPN_CAP = 26000;
+      const lpnPct = (data.totalLpns / LPN_CAP) * 100;
+      const lpnOver = data.totalLpns > LPN_CAP;
+      const lpnNear = !lpnOver && lpnPct >= 90;
+      
+      const lpnValueColor = lpnOver ? "text-[#E3001B]" : lpnNear ? "text-[#F37021]" : "text-[#009640]";
+      const lpnBarColor = lpnOver ? "#E3001B" : lpnNear ? "#F37021" : "#009640";
+      const lpnGlow = lpnOver ? "rgba(227,0,27,0.5)" : lpnNear ? "rgba(243,112,33,0.5)" : "rgba(0,150,64,0.5)";
+      const lpnEstado = lpnOver ? "Excedido" : lpnNear ? "Cerca del tope" : "Dentro del tope";
+
+      return (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center glass-panel p-4 flex-wrap gap-4">
+            <div><h2 className="text-xl font-bold text-[var(--text-main)] tracking-wide">AGENDA DE {data.fecha}</h2></div>
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => setShowHistoryList(true)} className="btn-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2"><Icon name="clipboard" size={16}/> Historial ({Object.keys(history).length})</button>
+              <button onClick={() => onSaveHistory(data)} className="btn-success px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2"><Icon name="save" size={16}/> Guardar Reporte</button>
+              <input type="file" ref={fileInputRef} onChange={onUpload} accept=".xlsx, .xls" className="hidden" />
+              <button onClick={() => fileInputRef.current?.click()} className="btn-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2"><Icon name="upload" size={16}/> Subir Excel</button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+            <div className="glass-panel p-4 text-center group">
+              <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">TOTAL LPNs</p>
+              <p className={`text-3xl font-black ${lpnOver ? "text-[#E3001B]" : "text-[var(--text-main)]"}`} style={{ textShadow: lpnOver ? '0 0 15px rgba(227,0,27,0.3)' : 'none' }}>{data.totalLpns.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-1 font-medium">Suma Hoja 1</p>
+            </div>
+            <div className="glass-panel p-4 text-center group">
+              <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">AVANCE</p>
+              <p className={`text-3xl font-black ${lpnValueColor}`} style={{ textShadow: `0 0 15px ${lpnGlow}` }}>{lpnPct.toFixed(1)}%</p>
+              <div className="w-full h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden mt-2 shadow-inner"><div className="h-full transition-all duration-1000 ease-out" style={{ width: `${Math.min(100, lpnPct)}%`, backgroundColor: lpnBarColor, boxShadow: `0 0 10px ${lpnGlow}` }} /></div>
+              <p className={`text-[10px] mt-1 font-semibold tracking-wide ${lpnValueColor}`}>{lpnEstado.toUpperCase()}</p>
+            </div>
+            <div className="glass-panel p-4 text-center group hover:border-[var(--text-muted)] transition"><p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">PROVEEDORES</p><p className="text-3xl font-black text-[var(--text-main)] group-hover:scale-105 transition-transform">{data.totalProveedores}</p><p className="text-[10px] text-[var(--text-muted)] mt-1 font-medium">Únicos en agenda</p></div>
+            <div className="glass-panel p-4 text-center group hover:border-[var(--text-muted)] transition"><p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">TOTAL DE CITAS</p><p className="text-3xl font-black text-[#009640]" style={{ textShadow: '0 0 15px rgba(0,150,64,0.3)' }}>{data.totalCitas}</p><p className="text-[10px] text-[var(--text-muted)] mt-1 font-medium">Agendadas</p></div>
+            <div className="glass-panel p-4 text-center group hover:border-[var(--text-muted)] transition"><p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">PENDIENTE</p><p className="text-3xl font-black text-[#F37021]" style={{ textShadow: '0 0 15px rgba(243,112,33,0.3)' }}>{data.pendientesCount}</p><p className="text-[10px] text-[var(--text-muted)] mt-1 font-medium">Sin agendar</p></div>
+          </div>
+
+          <section className="glass-panel p-4 flex flex-wrap items-center justify-between gap-4 border-l-4" style={{ borderLeftColor: lpnBarColor }}>
+            <div className="min-w-[200px]">
+              <p className={`text-sm font-bold tracking-wide ${lpnValueColor}`}>{lpnOver ? "⚠ TOPE DE LPNs EXCEDIDO" : lpnNear ? "⚠ CERCA DEL TOPE DE LPNs" : "✔ AVANCE DENTRO DEL TOPE"}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">{data.totalLpns.toLocaleString('es-PE', { maximumFractionDigits: 2 })} de 26,000 LPNs ({lpnPct.toFixed(1)}%){lpnOver && <span className="text-[#E3001B] ml-2 font-bold">· Excedido por {(data.totalLpns - LPN_CAP).toLocaleString('es-PE', { maximumFractionDigits: 2 })}</span>}</p>
+            </div>
+            <div className="flex-1 min-w-[200px] max-w-md"><div className="w-full h-2.5 bg-[var(--input-bg)] rounded-full overflow-hidden shadow-inner"><div className="h-full transition-all duration-1000 ease-out" style={{ width: `${Math.min(100, lpnPct)}%`, backgroundColor: lpnBarColor, boxShadow: `0 0 15px ${lpnGlow}` }} /></div></div>
+            <span className="text-[10px] font-black px-3 py-1.5 rounded-lg bg-[var(--card-hover)] border border-[var(--panel-border)] text-[var(--text-muted)] tracking-wider">TOPE 26,000</span>
+          </section>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="glass-panel p-4 flex flex-col">
+              <h3 className="font-bold text-[var(--text-muted)] text-center mb-4 uppercase tracking-widest text-xs">Ranking de Citas por Proveedor</h3>
+              <div className="h-[300px] w-full relative">
+                <canvas ref={rankingRef}></canvas>
+              </div>
+            </div>
+            <div className="glass-panel p-4 flex flex-col">
+              <h3 className="font-bold text-[var(--text-muted)] text-center mb-4 uppercase tracking-widest text-xs">Proveedores Atendidos</h3>
+              <div className="h-[300px] w-full relative">
+                <canvas ref={pieRef}></canvas>
+              </div>
+            </div>
+            <div className="glass-panel p-4 flex flex-col">
+              <h3 className="font-bold text-[var(--text-muted)] text-center mb-4 uppercase tracking-widest text-xs">Proveedores Pendientes</h3>
+              <div className="h-[300px] overflow-auto border border-[var(--panel-border)] rounded-xl bg-[var(--input-bg)]">
+                <table className="w-full text-left">
+                  <thead className="bg-[var(--table-head-bg)] sticky top-0 backdrop-blur-md"><tr><th className="px-4 py-2 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">PROVEEDOR</th><th className="px-4 py-2 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider text-right">ESTADO</th></tr></thead>
+                  <tbody className="divide-y divide-[var(--table-border)]">
+                    {data.pendientesList.map((p, i) => (<tr key={i} className="hover:bg-[var(--card-hover)] transition"><td className="px-4 py-2 text-[var(--text-dark)] font-medium text-xs">{p.proveedor}</td><td className="px-4 py-2 text-right"><Badge status="Pendiente" /></td></tr>))}
+                    {data.pendientesList.length === 0 && (<tr><td colSpan="2" className="text-center py-6 text-[var(--text-muted)] text-xs">No hay pendientes</td></tr>)}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ACTUALIZADO: Filtra los datos para que solo sumen la semana actual
+    function MasterPackDashboard({ data }) {
+      const pieRef = useRef(null);
+
+      const metrics = useMemo(() => {
+        const { start, end } = getWeekRange();
+        const weeklyData = data.filter(r => {
+          const rDate = toDate(r.date);
+          return rDate >= start && rDate <= end;
+        });
+
+        const total = weeklyData.length;
+        const pendientes = weeklyData.filter(r => r.status === "Pendiente").length;
+        const resueltos = weeklyData.filter(r => r.status === "Resuelta").length;
+        const procedidos = weeklyData.filter(r => r.proceeded === "Sí").length;
+        const uniqueSkus = new Set(weeklyData.map(r => r.sku)).size;
+        
+        const pendingList = weeklyData.filter(r => r.status === "Pendiente").slice(0, 20);
+
+        return { total, pendientes, resueltos, procedidos, uniqueSkus, pendingList };
+      }, [data]);
+
+      useEffect(() => {
+        if (!window.Chart) return;
+        
+        const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim();
+        Chart.defaults.color = textColor;
+        Chart.defaults.font.family = "'Outfit', sans-serif";
+        Chart.defaults.font.size = 12;
+
+        if (pieRef.current) {
+          window.Chart.getChart(pieRef.current)?.destroy();
+          new window.Chart(pieRef.current, {
+            type: 'doughnut',
+            data: {
+              labels: ['RESUELTA', 'PENDIENTE'],
+              datasets: [{ data: [metrics.resueltos, metrics.pendientes], backgroundColor: ['#009640', '#F37021'], borderWidth: 0, hoverOffset: 10 }]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false, cutout: '70%',
+              plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15, font: { size: 12, weight: '600' } } } }
+            }
+          });
+        }
+      }, [metrics]);
+
+      return (
+        <div className="space-y-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="glass-panel p-4 text-center group">
+              <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">TOTAL SKUs</p>
+              <p className="text-3xl font-black text-[var(--text-main)]">{metrics.uniqueSkus}</p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-1 font-medium">Modificados</p>
+            </div>
+            <div className="glass-panel p-4 text-center group hover:border-[var(--text-muted)] transition">
+              <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">PROCEDIDOS (SÍ)</p>
+              <p className="text-3xl font-black text-[#009640]" style={{ textShadow: '0 0 15px rgba(0,150,64,0.3)' }}>{metrics.procedidos}</p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-1 font-medium">Confirmados</p>
+            </div>
+            <div className="glass-panel p-4 text-center group hover:border-[var(--text-muted)] transition">
+              <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">PENDIENTES</p>
+              <p className="text-3xl font-black text-[#F37021]" style={{ textShadow: '0 0 15px rgba(243,112,33,0.3)' }}>{metrics.pendientes}</p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-1 font-medium">Por resolver</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="glass-panel p-4 flex flex-col">
+              <h3 className="font-bold text-[var(--text-muted)] text-center mb-4 uppercase tracking-widest text-xs">Estado de Cambios</h3>
+              <div className="h-[280px] w-full relative">
+                <canvas ref={pieRef}></canvas>
+              </div>
+            </div>
+            <div className="glass-panel p-4 flex flex-col">
+              <h3 className="font-bold text-[var(--text-muted)] text-center mb-4 uppercase tracking-widest text-xs">Cambios Pendientes</h3>
+              <div className="h-[280px] overflow-auto border border-[var(--panel-border)] rounded-xl bg-[var(--input-bg)]">
+                <table className="w-full text-left">
+                  <thead className="bg-[var(--table-head-bg)] sticky top-0 backdrop-blur-md">
+                    <tr>
+                      <th className="px-4 py-2 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">SKU</th>
+                      <th className="px-4 py-2 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">DESCRIPCIÓN</th>
+                      <th className="px-4 py-2 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider text-right">ESTADO</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--table-border)]">
+                    {metrics.pendingList.map((p, i) => (
+                      <tr key={i} className="hover:bg-[var(--card-hover)] transition">
+                        <td className="px-4 py-2 text-[var(--text-main)] font-bold text-xs">{p.sku}</td>
+                        <td className="px-4 py-2 text-[var(--text-dark)] text-xs">{p.description}</td>
+                        <td className="px-4 py-2 text-right"><Badge status="Pendiente" /></td>
+                      </tr>
+                    ))}
+                    {metrics.pendingList.length === 0 && (<tr><td colSpan="3" className="text-center py-6 text-[var(--text-muted)] text-xs">No hay pendientes</td></tr>)}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function RecordModal({ modal, onClose, onSave }) {
+      const isPack = modal.view === "packs"; const isMaster = modal.view === "master"; const isCitas = modal.view === "citas";
+      const dialog = useRef(null); const [error, setError] = useState("");
+      const [form, setForm] = useState(() => {
+        if (modal.record) {
+          if (isPack) return { ...modal.record, proceeded: modal.record.proceeded || "Sí", status: modal.record.status || "Pendiente" };
+          return { ...modal.record, createdAt: dateKey(modal.record.createdAt), appointmentDate: modal.record.appointmentDate || "", resolvedAt: modal.record.resolvedAt ? dateKey(modal.record.resolvedAt) : "" };
+        }
+        return isPack ? { sku: "", description: "", oldMP: "", newMP: "", date: dateKey(), user: USER, proceeded: "Sí", status: "Resuelta", resolvedAt: dateKey() } 
+                      : { createdAt: dateKey(), supplier: "", appointmentDate: dateKey(), reportType: "", description: "", reason: "No generó su cita", observations: "", status: "Pendiente", resolvedAt: "" };
+      });
+
+      useEffect(() => { const prev = document.activeElement; const overflow = document.body.style.overflow; document.body.style.overflow = "hidden"; dialog.current.showModal(); return () => { document.body.style.overflow = overflow; prev?.focus?.(); }; }, []);
+
+      function change(e) {
+        const { name, value } = e.target;
+        setForm(prev => {
+          const next = { ...prev, [name]: value };
+          if (isPack) {
+            if (name === "proceeded") {
+              next.status = value === "Sí" ? "Resuelta" : "Pendiente";
+              if (value === "Sí") next.resolvedAt = prev.resolvedAt || dateKey();
+            } else if (name === "status") {
+              next.proceeded = value === "Resuelta" ? "Sí" : "No";
+              next.resolvedAt = value === "Resuelta" ? (prev.resolvedAt || dateKey()) : "";
+            }
+          } else if (name === "status") {
+            next.resolvedAt = value === "Resuelta" ? (prev.resolvedAt || dateKey()) : "";
+          }
+          return next;
+        });
+        setError("");
+      }
+
+      function submit(e) {
+        e.preventDefault();
+        const required = isPack ? ["sku", "description", "user"] : isMaster ? ["sku", "description", "reason"] : isCitas ? ["supplier", "appointmentDate", "reportType", "description"] : ["supplier", "reason"];
+        if (required.some(k => !String(form[k] || "").trim())) return setError("Completa todos los campos requeridos.");
+        const cleaned = { ...form };
+        required.forEach(k => cleaned[k] = String(form[k]).trim());
+        if (isPack) {
+          const oldMP = Number(form.oldMP), newMP = Number(form.newMP);
+          if (![oldMP, newMP].every(n => Number.isSafeInteger(n) && n > 0)) return setError("Los valores deben ser enteros positivos.");
+          cleaned.oldMP = oldMP; cleaned.newMP = newMP; cleaned.date = dateKey(toDate(form.date)); 
+          
+          cleaned.proceeded = form.proceeded === "Sí" ? "Sí" : "No";
+          cleaned.status = cleaned.proceeded === "Sí" ? "Resuelta" : "Pendiente";
+          if (cleaned.status === "Resuelta" && !cleaned.resolvedAt) cleaned.resolvedAt = dateKey();
+
+        } else {
+          const today = new Date(); today.setHours(0,0,0,0);
+          const created = toDate(form.createdAt);
+          if (!created || created > today) return setError("Fecha de registro inválida.");
+          cleaned.createdAt = dateKey(created);
+          if (isCitas) { cleaned.appointmentDate = dateKey(toDate(form.appointmentDate)); cleaned.reason = ""; }
+          cleaned.resolvedAt = null;
+          if (form.status === "Resuelta") {
+            const res = toDate(form.resolvedAt);
+            if (!res || res < created || res > today) return setError("Fecha de resolución inválida.");
+            cleaned.resolvedAt = dateKey(res);
+          }
+        }
+        onSave(cleaned);
+      }
+
+      function field(label, name, type = "text", extra = {}) { 
+        return <label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">{label}<input className="field mt-2" name={name} type={type} value={form[name] ?? ""} onChange={change} required {...extra}/></label>; 
+      }
+
+      return <dialog ref={dialog} className="p-0 rounded-2xl shadow-2xl w-[calc(100%-2rem)] max-w-lg" onCancel={e => { e.preventDefault(); onClose(); }} onClick={e => { if (e.target === dialog.current) onClose(); }}>
+        <div className="p-5 border-b border-[var(--panel-border)] flex justify-between items-start bg-[var(--table-head-bg)]">
+          <div><h2 className="text-xl font-bold text-[var(--text-main)]">{modal.record ? "Editar registro" : isPack ? "Nuevo Cambio" : isCitas ? "Nuevo Reporte" : "Nueva Incidencia"}</h2><p className="text-sm text-[var(--text-muted)] mt-1">{VIEWS[modal.view].title}</p></div>
+          <button onClick={onClose} className="text-2xl text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--card-hover)] w-10 h-10 rounded-xl flex items-center justify-center transition">×</button>
+        </div>
+        <form onSubmit={submit} className="p-5">
+          {isPack ? <>
+            {field("SKU", "sku", "text", { autoFocus: true })}{field("Descripción", "description")}
+            <div className="grid grid-cols-2 gap-4">{field("MP Antiguo", "oldMP", "number", {min:1})}{field("MP Nuevo", "newMP", "number", {min:1})}{field("Fecha de Cambio", "date", "date")}{field("Usuario", "user")}</div>
+            <label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">Procedió<select className="field mt-2" name="proceeded" value={form.proceeded} onChange={change}><option>Sí</option><option>No</option></select></label>
+            <label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">Estado<select className="field mt-2" name="status" value={form.status} onChange={change}><option>Pendiente</option><option>Resuelta</option></select></label>
+          </> : <>
+            {field("Fecha de registro", "createdAt", "date", { max: dateKey() })}
+            {isMaster ? <>{field("SKU", "sku", {autoFocus:true})}{field("Descripción", "description")}<label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">Motivo<textarea className="field mt-2" rows="3" name="reason" required value={form.reason} onChange={change}/></label></> 
+            : isCitas ? <>{field("Proveedor", "supplier", {autoFocus:true})}{field("Fecha de la Cita", "appointmentDate", "date")}{field("Tipo de Reporte", "reportType")}<label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">Descripción<textarea className="field mt-2" rows="3" name="description" required value={form.description} onChange={change}/></label></>
+            : <>
+                {field("Proveedor", "supplier", "text", {autoFocus:true})}
+                <label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">Motivo
+                  <select className="field mt-2" name="reason" value={form.reason} onChange={change}>
+                    {SUPPLIER_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </label>
+                <label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">Observaciones
+                  <textarea className="field mt-2" rows="3" name="observations" value={form.observations || ""} onChange={change} placeholder="Detalles adicionales (opcional)"/>
+                </label>
+              </>}
+            <label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">Estado<select className="field mt-2" name="status" value={form.status} onChange={change}>{STATES.map(s => <option key={s}>{s}</option>)}</select></label>
+            {form.status === "Resuelta" && field("Fecha de resolución", "resolvedAt", "date", { max: dateKey() })}
+          </>}
+          {error && <p className="bg-[#E3001B]/10 border border-[#E3001B]/20 text-[#E3001B] p-3 rounded-xl text-sm font-semibold">{error}</p>}
+          <div className="pt-4 mt-4 border-t border-[var(--panel-border)] flex justify-end gap-3"><button type="button" onClick={onClose} className="px-5 py-2.5 border border-[var(--panel-border)] rounded-xl text-sm text-[var(--text-dark)] font-semibold hover:bg-[var(--card-hover)] transition">Cancelar</button><button type="submit" className="btn-primary px-5 py-2.5 rounded-xl text-sm font-bold">Guardar</button></div>
+        </form>
+      </dialog>;
+    }
+
+    function App() {
+      const [role, setRole] = useState(null); const [showAdmin, setShowAdmin] = useState(false); const [password, setPassword] = useState(""); const [loginError, setLoginError] = useState("");
+      const [view, setView] = useState("resumen"); const [data, setData] = useState(loadData);
+      
+      const [dashboardData, setDashboardData] = useState(null);
+      const [dashboardHistory, setDashboardHistory] = useState(loadHistory);
+      const [excelHistory, setExcelHistory] = useState(loadExcelHistory);
+
+      const [search, setSearch] = useState(""); const [filter, setFilter] = useState(""); const [dateFrom, setDateFrom] = useState(""); const [dateTo, setDateTo] = useState("");
+      const [userFilter, setUserFilter] = useState(""); const [proceededFilter, setProceededFilter] = useState("");
+      const [selectedIds, setSelectedIds] = useState([]); const [modal, setModal] = useState(null); const [notice, setNotice] = useState("");
+      const [importReport, setImportReport] = useState(null); const [storageError, setStorageError] = useState(""); const [now, setNow] = useState(Date.now());
+      
+      const [theme, setTheme] = useState(localStorage.getItem('slotting_theme') || 'dark');
+      const [showThemeMenu, setShowThemeMenu] = useState(false);
+      
+      const [packDateFilter, setPackDateFilter] = useState("");
+
+      const fileRef = useRef(null); const headerCheckRef = useRef(null);
+
+      const isAdmin = role === "Admin"; const isPack = view === "packs"; const isCitas = view === "citas"; const rows = data[view] || [];
+      const currentDay = dateKey(new Date(now));
+
+      useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('slotting_theme', theme);
+      }, [theme]);
+
+      useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); setStorageError(""); } catch { setStorageError("No se pudo guardar localmente."); } }, [data]);
+      useEffect(() => { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(dashboardHistory)); } catch {} }, [dashboardHistory]);
+      useEffect(() => { try { localStorage.setItem(EXCEL_HISTORY_KEY, JSON.stringify(excelHistory)); } catch {} }, [excelHistory]);
+      
+      useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(timer); }, []);
+      useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(""), 5000); return () => clearTimeout(timer); }, [notice]);
+      useEffect(() => { setSelectedIds(prev => { const next = prev.filter(id => rows.some(r => r.id === id)); return next.length === prev.length ? prev : next; }); }, [rows]);
+
+      function handleRefresh() {
+        setData(loadData());
+        setDashboardHistory(loadHistory());
+        setExcelHistory(loadExcelHistory());
+        setNow(Date.now());
+        setNotice("Datos actualizados correctamente.");
+      }
+
+      function navigate(next) { setView(next); setSearch(""); setFilter(""); setDateFrom(""); setDateTo(""); setUserFilter(""); setProceededFilter(""); setSelectedIds([]); setImportReport(null); setPackDateFilter(""); }
+      function login(e) { e.preventDefault(); if (password !== "admin123") return setLoginError("Contraseña incorrecta"); setRole("Admin"); setPassword(""); setLoginError(""); }
+      function logout() { setRole(null); setShowAdmin(false); setPassword(""); setLoginError(""); setModal(null); setNotice(""); setImportReport(null); setSelectedIds([]); navigate("master"); }
+
+      function saveRecord(record) {
+        if (!role || (modal.record && !isAdmin)) return;
+        const target = modal.view; const prefix = target === "master" ? "DM" : target === "suppliers" ? "AG" : target === "citas" ? "RC" : "MP";
+        const saved = { ...record, id: modal.record?.id || uid(prefix) };
+        setData(prev => ({ ...prev, [target]: modal.record ? prev[target].map(r => r.id === saved.id ? saved : r) : [saved, ...prev[target]] }));
+        setNotice("Guardado correctamente."); setModal(null); setNow(Date.now());
+      }
+
+      function deleteRecord(row) { if (!isAdmin) return; if (!confirm("¿Eliminar registro?")) return; setData(prev => ({ ...prev, [view]: prev[view].filter(i => i.id !== row.id) })); setNotice("Eliminado."); }
+      function deleteSelected() { if (!isAdmin || !selectedIds.length) return; if (!confirm(`¿Eliminar ${selectedIds.length} registros?`)) return; const s = new Set(selectedIds); setData(prev => ({ ...prev, [view]: prev[view].filter(i => !s.has(i.id)) })); setSelectedIds([]); setNotice("Eliminados."); }
+      function toggleRow(id) { setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]); }
+      function toggleAllVisible() { if (allVisibleSelected) { const s = new Set(visibleRows.map(r => r.id)); setSelectedIds(prev => prev.filter(id => !s.has(id))); } else { const ids = visibleRows.map(r => r.id); setSelectedIds(prev => [...new Set([...prev, ...ids])]); } }
+
+      const visibleRows = rows.filter(row => {
+        const text = [row.id, row.sku, row.description, row.supplier, row.reason, row.user, row.reportType, row.observations].filter(Boolean).join(" ").toLowerCase();
+        if (!text.includes(search.trim().toLowerCase())) return false;
+        if (!isPack && filter && row.status !== filter) return false;
+        const rowDay = isPack ? row.date : dateKey(row.createdAt);
+        if (dateFrom && rowDay < dateFrom) return false;
+        if (dateTo && rowDay > dateTo) return false;
+        if (isPack && userFilter && row.user !== userFilter) return false;
+        if (isPack && proceededFilter && (row.proceeded || "Sí") !== proceededFilter) return false;
+        return true;
+      });
+
+      const allVisibleSelected = visibleRows.length > 0 && visibleRows.every(r => selectedIds.includes(r.id));
+      const someVisibleSelected = visibleRows.some(r => selectedIds.includes(r.id));
+      const packUsers = [...new Set(data.packs.map(r => r.user).filter(Boolean))].sort();
+
+      useEffect(() => { if (headerCheckRef.current) headerCheckRef.current.indeterminate = someVisibleSelected && !allVisibleSelected; }, [someVisibleSelected, allVisibleSelected, visibleRows.length]);
+
+      function clearFilters() {
+        setSearch(""); setFilter(""); setDateFrom(""); setDateTo(""); setUserFilter(""); setProceededFilter("");
+        setNotice("Filtros restablecidos.");
+      }
+
+      /* ---------- FUNCIONES DE HISTORIAL DE DASHBOARD ---------- */
+      function handleSaveHistory(dashData) {
+        if (!dashData || !dashData.fecha) return;
+        setDashboardHistory(prev => ({ ...prev, [dashData.fecha]: dashData }));
+        
+        let parsedDate = new Date();
+        if (dashData.fecha) {
+          const parts = dashData.fecha.split('-');
+          if (parts.length === 3) parsedDate = new Date(parts[2], parts[1] - 1, parts[0]);
+        }
+        const createdAt = parsedDate.toISOString();
+        
+        const existing = new Set(data.suppliers.filter(row => row.status === "Pendiente").map(row => supplierKey(row.supplier)));
+        const incidents = [];
+        
+        for (const item of (Array.isArray(dashData.pendientesList) ? dashData.pendientesList : [])) {
+          const supplier = String(typeof item === "string" ? item : item?.proveedor ?? "").trim().replace(/\s+/g, " ");
+          const key = supplierKey(supplier);
+          if (!key || existing.has(key)) continue;
+          existing.add(key);
+          incidents.push({
+            id: uid("AG"), createdAt, supplier, 
+            reason: "No generó su cita", 
+            observations: "Generado automáticamente desde Dashboard",
+            status: "Resuelta", resolvedAt: createdAt, 
+            evidence: "Cierre automático", closureNote: "Registrado al guardar Dashboard"
+          });
+        }
+        
+        if (incidents.length) setData(prev => ({ ...prev, suppliers: [...incidents, ...prev.suppliers] }));
+        setNotice(`Reporte guardado. Se generaron ${incidents.length} incidencias (Fecha: ${dashData.fecha}).`);
+      }
+
+      function handleLoadHistory(dateKey) {
+        if (!dateKey || !dashboardHistory[dateKey]) return;
+        setDashboardData(dashboardHistory[dateKey]);
+        setNotice(`Cargando reporte guardado del ${dateKey}`);
+      }
+
+      function handleDeleteHistory(dateKey) {
+        setDashboardHistory(prev => { const next = { ...prev }; delete next[dateKey]; return next; });
+        if (dashboardData && dashboardData.fecha === dateKey) setDashboardData(null);
+        setNotice(`Reporte eliminado del historial.`);
+      }
+
+      /* ---------- PROCESAR EXCEL DE DASHBOARD ---------- */
+      const handleDashboardUpload = async (e) => {
+        const file = e.target.files?.[0]; e.target.value = "";
+        if (!file) return;
+        const XLSX = window.XLSX;
+        if (!XLSX || typeof XLSX.read !== "function" || typeof XLSX.utils?.sheet_to_json !== "function") {
+          setNotice("No se pudo cargar la librería XLSX. Revisa tu conexión."); return;
+        }
+
+        try {
+          const buffer = await file.arrayBuffer();
+          const book = XLSX.read(buffer, { type: "array" });
+          
+          let fechaStr = "CITAS";
+          const match = file.name.match(/\((\d{2}-\d{2}-\d{4})\)/);
+          if (match) fechaStr = match[1];
+
+          const sheet1 = book.Sheets["AGENDA 01"];
+          if (!sheet1) throw new Error("No se encontró la hoja AGENDA 01");
+          const rows1 = XLSX.utils.sheet_to_json(sheet1, { header: 1, defval: "" });
+          
+          const sheet2 = book.Sheets["AGENDA  02"] || book.Sheets["AGENDA 02"];
+          const rows2 = sheet2 ? XLSX.utils.sheet_to_json(sheet2, { header: 1, defval: "" }) : [];
+
+          let totalLpns = 0, totalProveedores = new Set(), pendientesCount = 0, agendadosCount = 0, pendientesList = [];
+          let totalCitas = 0, rankingMap = Object.create(null);
+
+          let colTotalLPN = -1, colCitasHoja1 = -1, colProveedor = 1, colEstado = -1;
+
+          for (let r = 0; r < 10; r++) {
+            if (!rows1[r]) continue;
+            rows1[r].forEach((cell, idx) => {
+              const text = String(cell).trim().toUpperCase();
+              if (text === "TOTAL" || text.includes("TOTAL LPN") || text.includes("LPN")) colTotalLPN = idx;
+              if (text.includes("CANTIDAD DE CITAS") || text === "CITAS") colCitasHoja1 = idx;
+              if (text === "ESTADO") colEstado = idx;
+              if (text === "PROVEEDOR" || text === "NOMBRE") colProveedor = idx;
+            });
+          }
+          
+          if (colTotalLPN === -1) colTotalLPN = 6; 
+          if (colEstado === -1) colEstado = 8;
+
+          for (let i = 4; i < rows1.length; i++) {
+            const row = rows1[i];
+            if (!row || !row[colProveedor]) continue;
+            
+            const proveedor = String(row[colProveedor]).trim();
+            const estado = colEstado !== -1 ? String(row[colEstado]).trim().toUpperCase() : "";
+            const isTotalRow = proveedor.toUpperCase().includes("TOTAL") || String(row[0]).toUpperCase().includes("TOTAL");
+
+            if (proveedor && !isTotalRow) {
+              totalProveedores.add(proveedor);
+              const lpns = Number(row[colTotalLPN]) || 0;
+              if (!isNaN(lpns)) totalLpns += lpns;
+              
+              if (colCitasHoja1 !== -1) {
+                const citas = Number(row[colCitasHoja1]) || 0;
+                if (!isNaN(citas)) { totalCitas += citas; rankingMap[proveedor] = (rankingMap[proveedor] || 0) + citas; }
+              }
+
+              if (estado === "PENDIENTE") { pendientesCount++; pendientesList.push({ proveedor }); } 
+              else if (estado === "AGENDADO") { agendadosCount++; }
+            }
+          }
+
+          if (colCitasHoja1 === -1 && rows2.length > 0) {
+            let colCitasHoja2 = -1, colProvHoja2 = 1;
+            for (let r = 0; r < 10; r++) {
+              if (!rows2[r]) continue;
+              rows2[r].forEach((cell, idx) => {
+                const text = String(cell).trim().toUpperCase();
+                if (text.includes("CANTIDAD DE CITAS") || text === "CITAS") colCitasHoja2 = idx;
+                if (text === "PROVEEDOR" || text === "NOMBRE") colProvHoja2 = idx;
+              });
+            }
+            if (colCitasHoja2 === -1) colCitasHoja2 = 4;
+
+            for (let i = 4; i < rows2.length; i++) {
+              const row = rows2[i];
+              if (!row || !row[colProvHoja2]) continue;
+              const proveedor = String(row[colProvHoja2]).trim();
+              const isTotalRow = proveedor.toUpperCase().includes("TOTAL") || String(row[0]).toUpperCase().includes("TOTAL");
+              if (!isTotalRow && proveedor) {
+                const citas = Number(row[colCitasHoja2]) || 0;
+                if (!isNaN(citas)) { totalCitas += citas; rankingMap[proveedor] = (rankingMap[proveedor] || 0) + citas; }
+              }
+            }
+          }
+
+          const rankingCompleto = Object.keys(rankingMap).map(prov => ({ proveedor: prov, citas: rankingMap[prov] })).sort((a, b) => b.citas - a.citas);
+          const ranking = rankingCompleto.slice(0, 10);
+
+          setDashboardData({
+            fecha: fechaStr, totalLpns, totalProveedores: totalProveedores.size, totalCitas, pendientesCount, pendientesList, ranking, rankingCompleto,
+            atendidos: { agendados: agendadosCount, pendientes: pendientesCount }
+          });
+          setNotice("Dashboard generado correctamente.");
+        } catch (error) {
+          console.error(error);
+          setNotice("Error al procesar el Excel. Verifica el formato.");
+        }
+      };
+
+      function exportExcel() {
+        if (!window.XLSX || !visibleRows.length) return;
+        try {
+          let table = [];
+          let filename = "";
+          if (isPack) {
+            table = [["SKU", "Descripción", "MP Antiguo", "MP Nuevo", "Fecha", "Usuario", "Procedió", "Estado"], ...visibleRows.map(r => [r.sku, r.description, r.oldMP, r.newMP, formatDate(r.date), r.user, r.proceeded, r.status])];
+            filename = `Reporte_Master_Pack_${dateKey()}.xlsx`;
+          } else if (isCitas) {
+            table = [["Fecha Reg", "Proveedor", "Fecha Cita", "Tipo", "Descripción", "Estado"], ...visibleRows.map(r => [formatDate(r.createdAt), r.supplier, formatDate(r.appointmentDate), r.reportType, r.description, r.status])];
+            filename = `Reporte_Citas_${dateKey()}.xlsx`;
+          } else if (view === "suppliers") {
+            table = [["Fecha", "Proveedor", "Motivo", "Observaciones", "Estado"], ...visibleRows.map(r => [formatDate(r.createdAt), r.supplier, r.reason, r.observations, r.status])];
+            filename = `Reporte_Proveedores_${dateKey()}.xlsx`;
+          } else {
+            table = [["Fecha", "SKU", "Descripción", "Motivo", "Estado"], ...visibleRows.map(r => [formatDate(r.createdAt), r.sku, r.description, r.reason, r.status])];
+            filename = `Reporte_${view}_${dateKey()}.xlsx`;
+          }
+          const sheet = XLSX.utils.aoa_to_sheet(table); const book = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(book, sheet, "Datos"); XLSX.writeFile(book, filename);
+          setNotice("Reporte exportado.");
+        } catch { setNotice("Error al exportar."); }
+      }
+
+      function downloadTemplate() {
+        if (!window.XLSX) return;
+        const sheet = XLSX.utils.aoa_to_sheet([["SKU", "Descripción", "MP Antiguo", "MP Nuevo", "Fecha de Cambio", "Usuario", "Procedió"]]);
+        const book = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book, sheet, "Master Pack");
+        XLSX.writeFile(book, `Plantilla_Master_Pack_${dateKey()}.xlsx`);
+      }
+
+      async function importFile(event) {
+        const file = event.target.files?.[0]; event.target.value = ""; if (!file || !window.XLSX) return;
+        try {
+          const buffer = await file.arrayBuffer(); const book = XLSX.read(buffer, { type: "array" });
+          const sheet = book.Sheets["Master Pack"] || book.Sheets[book.SheetNames[0]];
+          
+          const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: true });
+          const added = []; const errors = [];
+          
+          rawRows.forEach((raw, idx) => {
+            const getVal = (aliases) => { 
+              for (let a of aliases) {
+                if (raw[a] !== undefined) return raw[a];
+                const key = Object.keys(raw).find(k => k.trim().toLowerCase() === a.trim().toLowerCase());
+                if (key) return raw[key];
+              }
+              return ""; 
+            };
+            
+            const sku = String(getVal(["SKU", "sku", "Codigo"])).trim();
+            const desc = String(getVal(["Descripción", "descripcion", "Producto"])).trim();
+            const oldMP = Number(getVal(["MP Antiguo", "mp antiguo"]));
+            const newMP = Number(getVal(["MP Nuevo", "mp nuevo"]));
+            const dateVal = getVal(["Fecha de Cambio", "Fecha", "fecha"]);
+            const user = String(getVal(["Usuario", "user"])).trim() || USER;
+            
+            const rawProc = String(getVal(["Procedió", "procedio", "Procedio"])).trim().toLowerCase();
+            const isResolved = rawProc === "sí" || rawProc === "si" || rawProc === "s";
+
+            if (sku && desc && !isNaN(oldMP) && !isNaN(newMP)) {
+              const finalDate = parseExcelDate(dateVal);
+              
+              added.push({ 
+                id: uid("MP"), sku, description: desc, oldMP, newMP, 
+                date: finalDate, 
+                user, 
+                proceeded: isResolved ? "Sí" : "No",
+                status: isResolved ? "Resuelta" : "Pendiente",
+                resolvedAt: isResolved ? finalDate : null
+              });
+            } else { errors.push(`Fila ${idx + 2}: datos incompletos.`); }
+          });
+          
+          if (added.length) {
+            setData(prev => ({ ...prev, packs: [...added, ...prev.packs] }));
+            setExcelHistory(prev => [{ id: uid("EH"), fileName: file.name, date: new Date().toISOString(), count: added.length }, ...prev].slice(0, 10));
+          }
+          setImportReport({ added: added.length, errors }); 
+          setNotice(`Importación: ${added.length} agregados.`);
+        } catch (e) { 
+          console.error(e);
+          setNotice("Error al leer archivo."); 
+        }
+      }
+
+      function rowActions(row) {
+        return <div className="flex gap-3 text-xs whitespace-nowrap">
+          <button className="text-[#F37021] hover:text-[#ff8c42] font-semibold transition" onClick={() => setModal({ view, record: row })}>Editar</button>
+          <button className="text-[#E3001B] hover:text-[#ff3347] font-semibold transition" onClick={() => deleteRecord(row)}>Eliminar</button>
+        </div>;
+      }
+
+      // --- LOGIN SCREEN ---
+      if (!role) return <main className="min-h-screen grid place-items-center p-5">
+        <section className="glass-panel p-8 w-full max-w-md shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#E3001B] via-[#F37021] to-[#009640]"></div>
+          <div className="bg-[#E3001B] w-14 h-14 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_20px_rgba(227,0,27,0.5)]"><Icon name="box" size={28}/></div>
+          <p className="uppercase text-xs tracking-widest text-[#F37021] font-bold mb-2">Operaciones · Slotting</p>
+          <h1 className="text-3xl font-black text-[var(--text-main)] mb-3">Gestión corporativa</h1>
+          <p className="text-base text-[var(--text-muted)] mb-8">Selecciona tu perfil para ingresar al sistema.</p>
+          
+          <button onClick={() => { setRole("Agente"); setPassword(""); setLoginError(""); }} className="btn-primary w-full py-3.5 rounded-xl text-base font-bold flex items-center justify-center gap-3 mb-3"><Icon name="user" size={20}/> Entrar como Agente</button>
+          <button onClick={() => { setShowAdmin(true); setLoginError(""); }} className="btn-white w-full py-3.5 rounded-xl text-base font-bold flex items-center justify-center gap-3"><Icon name="shield" size={20}/> Entrar como Administrador</button>
+          
+          {showAdmin && <form onSubmit={login} className="mt-6 pt-6 border-t border-[var(--panel-border)] space-y-4">
+            <label className="block text-sm font-semibold text-[var(--text-dark)]">Contraseña</label>
+            <input type="password" className="field" value={password} autoFocus required onChange={e => { setPassword(e.target.value); setLoginError(""); }} placeholder="Ingresa tu contraseña"/>
+            {loginError && <p className="text-sm text-[#E3001B] font-semibold">{loginError}</p>}
+            <button type="submit" className="btn-primary w-full py-3 rounded-xl text-base font-bold mt-2">Ingresar</button>
+          </form>}
+        </section>
+      </main>;
+
+      // --- KPI CALCULATIONS ---
+      const pending = rows.filter(r => r.status === "Pendiente").length;
+      const processing = rows.filter(r => r.status === "En Proceso").length;
+      const resolvedToday = rows.filter(r => r.status === "Resuelta" && r.resolvedAt && dateKey(r.resolvedAt) === currentDay).length;
+      const critical = rows.filter(r => r.status !== "Resuelta" && elapsedDays(r, now) >= 1).length;
+
+      const totalPacks = rows.length;
+      const packsToday = rows.filter(r => r.date === currentDay).length;
+      const uniqueSkus = new Set(rows.map(r => r.sku)).size;
+
+      const kpis = isPack ? [
+        { label: "Pendientes", value: rows.filter(r => r.status === "Pendiente").length, color: "#F37021", icon: "◷" },
+        { label: "Resueltos", value: rows.filter(r => r.status === "Resuelta").length, color: "#009640", icon: "✓" },
+        { label: "SKUs Modificados", value: uniqueSkus, color: "#3B82F6", icon: "#" }
+      ] : view === "suppliers" ? [
+        { label: "No subió su cita", value: rows.filter(r => r.reason.includes("No generó")).length, color: "#F37021", icon: "◷" },
+        { label: "Cita tardía", value: rows.filter(r => r.reason.includes("tardía")).length, color: "#E3001B", icon: "!" },
+        { label: "Por límite cubierto", value: rows.filter(r => r.reason.includes("límite")).length, color: "#3B82F6", icon: "↻" }
+      ] : [
+        { label: "Pendientes", value: pending, color: "#F37021", icon: "◷" },
+        { label: "En Proceso", value: processing, color: "#3B82F6", icon: "↻" },
+        (view === "master" || view === "citas")
+          ? { label: "Resueltas Hoy", value: resolvedToday, color: "#009640", icon: "✓" }
+          : { label: "Críticas +1 día", value: critical, color: "#E3001B", icon: "!" }
+      ];
+      const maxKpi = Math.max(...kpis.map(k => k.value), 1);
+
+      // --- RESUMEN EJECUTIVO ---
+      const allOps = [...data.master, ...data.suppliers, ...data.citas];
+      const byStatus = (list, s) => list.filter(r => r.status === s).length;
+      const executiveSummary = {
+        pending: byStatus(allOps, "Pendiente"),
+        processing: byStatus(allOps, "En Proceso"),
+        resolvedToday: allOps.filter(r => r.status === "Resuelta" && r.resolvedAt && dateKey(r.resolvedAt) === currentDay).length,
+        critical: data.suppliers.filter(r => r.status !== "Resuelta" && elapsedDays(r, now) >= 1).length,
+        packsToday: data.packs.filter(r => r.date === currentDay).length,
+        totalPacks: data.packs.length,
+        areas: [
+          { name: "Datos Maestros", pendientes: byStatus(data.master, "Pendiente"), proceso: byStatus(data.master, "En Proceso"), resueltas: byStatus(data.master, "Resuelta") },
+          { name: "Proveedores", pendientes: byStatus(data.suppliers, "Pendiente"), proceso: byStatus(data.suppliers, "En Proceso"), resueltas: byStatus(data.suppliers, "Resuelta") },
+          { name: "Citas", pendientes: byStatus(data.citas, "Pendiente"), proceso: byStatus(data.citas, "En Proceso"), resueltas: byStatus(data.citas, "Resuelta") }
+        ]
+      };
+
+      return <div className="min-h-screen font-sans text-[var(--text-main)] selection:bg-[#E3001B] selection:text-white">
+        {/* HEADER */}
+        <header className="glass-panel border-0 border-b border-[var(--panel-border)] rounded-none sticky top-0 z-50 transition-colors duration-300" style={{ background: 'var(--header-bg)' }}>
+          <div className="w-full max-w-[1920px] mx-auto px-5 sm:px-8 py-3 flex justify-between items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-4">
+              <div className="bg-[#E3001B] p-3 rounded-xl shadow-[0_0_15px_rgba(227,0,27,0.4)]"><Icon name="box" size={24}/></div>
+              <div>
+                <p className="brand-mark text-2xl text-[var(--text-main)]">Agendamiento<span>/slotting.</span></p>
+                <p className="text-[10px] text-[#009640] font-bold tracking-widest uppercase">Gestión corporativa</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 relative">
+              <button onClick={handleRefresh} className="btn-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2" title="Actualizar datos"><Icon name="refresh" size={16}/> Actualizar</button>
+              
+              <div className="relative">
+                <button onClick={() => setShowThemeMenu(!showThemeMenu)} className="btn-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
+                  <Icon name="palette" size={16}/> Tema
+                </button>
+                {showThemeMenu && (
+                  <div className="absolute right-0 mt-2 w-32 glass-panel py-2 z-50 shadow-2xl border border-[var(--panel-border)]">
+                    {['dark', 'light', 'gray'].map(t => (
+                      <button key={t} onClick={() => { setTheme(t); setShowThemeMenu(false); }} className={`block w-full text-left px-4 py-2 text-sm font-semibold transition ${theme === t ? 'text-[#F37021]' : 'text-[var(--text-main)] hover:bg-[var(--card-hover)]'}`}>
+                        {t === 'dark' ? 'Oscuro' : t === 'light' ? 'Blanco' : 'Gris'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-bold text-[var(--text-main)]">Xiomara - Asistente Slotting</p>
+                <span className="inline-block mt-1 text-[10px] font-bold text-[#F37021] bg-[#F37021]/10 px-2 py-0.5 rounded tracking-wide uppercase">Rol: {role}</span>
+              </div>
+              <button onClick={logout} title="Cerrar sesión" className="p-2.5 bg-[var(--card-hover)] border border-[var(--panel-border)] rounded-xl hover:bg-[#E3001B]/20 hover:border-[#E3001B]/30 text-[var(--text-muted)] hover:text-[#E3001B] transition"><Icon name="logout" size={20}/></button>
+            </div>
+          </div>
+        </header>
+
+        <div className="w-full max-w-[1920px] mx-auto lg:flex min-h-[calc(100vh-85px)]">
+          {/* SIDEBAR */}
+          <aside className="app-sidebar lg:w-64 shrink-0 p-4 lg:p-5 z-40 transition-all">
+            <p className="hidden lg:block text-[10px] font-bold tracking-widest text-[var(--text-muted)] px-3 mt-3 mb-5 uppercase">Menú Principal</p>
+            <nav className="flex lg:flex-col gap-1.5 overflow-x-auto pb-2 lg:pb-0 scrollbar-hide">
+              {Object.entries(VIEWS).map(([key, item]) =>
+                <button key={key} onClick={() => navigate(key)} className={`nav-link flex items-center gap-3 px-4 py-3 text-sm text-left font-semibold shrink-0 lg:shrink ${view === key ? "active" : ""}`}>
+                  <span className="shrink-0"><Icon name={item.icon}/></span>
+                  {item.title}
+                </button>
+              )}
+            </nav>
+          </aside>
+
+          {/* MAIN CONTENT */}
+          <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 space-y-6">
+            <div className="flex justify-between gap-4 items-start flex-wrap">
+              <div>
+                <p className="text-xs text-[#F37021] font-bold mb-1 uppercase tracking-widest">Operaciones / {VIEWS[view].title}</p>
+                <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-[var(--text-main)]">{VIEWS[view].title}</h1>
+                <p className="text-sm text-[var(--text-muted)] mt-1">{VIEWS[view].subtitle}</p>
+              </div>
+              <span className="glass-panel px-3 py-1.5 text-xs font-bold text-[var(--text-muted)] tracking-wider">{formatDate(currentDay)}</span>
+            </div>
+
+            {storageError && <div className="p-4 rounded-xl bg-[#E3001B]/10 border border-[#E3001B]/20 text-[#E3001B] text-sm font-bold">{storageError}</div>}
+            {notice && <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-500 text-sm font-bold flex justify-between items-center shadow-[0_0_15px_rgba(59,130,246,0.1)]">
+              {notice} <button onClick={() => setNotice("")} className="text-xl hover:text-blue-700 transition">×</button>
+            </div>}
+
+            {/* VISTA ESPECIAL: DASHBOARD DE CITAS */}
+            {view === "resumen" ? (
+              <ExecutiveSummary summary={executiveSummary} />
+            ) : view === "dashboardCitas" ? (
+              <CitasDashboard 
+                data={dashboardData} 
+                onUpload={handleDashboardUpload} 
+                history={dashboardHistory}
+                onSaveHistory={handleSaveHistory}
+                onLoadHistory={handleLoadHistory}
+                onDeleteHistory={handleDeleteHistory}
+              />
+            ) : view === "citas" ? (
+              <CitasAnalytics dashboardHistory={dashboardHistory} />
+            ) : (
+              <>
+                {importReport && <div className="glass-panel p-4 text-sm">
+                  <p className="font-bold text-[#009640]">Carga finalizada: {importReport.added} importados.</p>
+                  {importReport.errors.length > 0 && <ul className="mt-2 text-xs text-[#E3001B] list-disc pl-4">{importReport.errors.map((e,i) => <li key={i}>{e}</li>)}</ul>}
+                </div>}
+
+                <section className="glass-panel overflow-hidden border-t-4 border-t-[#E3001B]">
+                  <div className="p-4 sm:p-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <div>
+                        <h2 className="text-xl font-bold text-[var(--text-main)]">Indicadores de Rendimiento</h2>
+                        <p className="text-sm text-[var(--text-muted)] mt-1">Resumen visual del estado actual</p>
+                      </div>
+                    </div>
+                    <div className="grid sm:grid-cols-3 gap-4">
+                      {kpis.map(kpi => <GaugeCard key={kpi.label} {...kpi} max={maxKpi} />)}
+                    </div>
+                  </div>
+                </section>
+
+                {/* DASHBOARD PARA MASTER PACK */}
+                {isPack && (
+                  <>
+                    <div className="flex justify-between items-center glass-panel p-4 flex-wrap gap-4 mb-2 mt-6">
+                      <div>
+                        <h2 className="text-lg font-bold text-[var(--text-main)] tracking-wide">
+                          CAMBIOS DEL {packDateFilter ? formatDate(packDateFilter) : "HISTÓRICO"}
+                        </h2>
+                      </div>
+                      <div className="flex gap-3 items-center">
+                        <label className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">Filtrar por fecha:</label>
+                        <input type="date" className="field w-auto text-sm" value={packDateFilter} onChange={e => setPackDateFilter(e.target.value)} />
+                        {packDateFilter && <button onClick={() => setPackDateFilter("")} className="btn-white px-3 py-1.5 text-xs font-bold">Ver Todo</button>}
+                      </div>
+                    </div>
+                    <MasterPackDashboard data={packDateFilter ? rows.filter(r => r.date === packDateFilter) : rows} />
+                  </>
+                )}
+
+                <section className="glass-panel overflow-hidden">
+                  <div className="p-4 sm:p-5 border-b border-[var(--panel-border)] space-y-4 bg-[var(--table-head-bg)]">
+                    <div className="flex justify-between items-center gap-4 flex-wrap">
+                      <div>
+                        <h2 className="text-lg font-bold text-[var(--text-main)]">{isPack ? "Historial de cambios" : "Listado de registros"}</h2>
+                        <p className="text-xs text-[var(--text-muted)] mt-1">{visibleRows.length} de {rows.length} registros</p>
+                      </div>
+                      <div className="flex gap-2 flex-wrap">
+                        {isPack && <>
+                          <button onClick={downloadTemplate} className="btn-white rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-2"><Icon name="download" size={16}/> Plantilla</button>
+                          <button onClick={() => fileRef.current?.click()} className="btn-white rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-2"><Icon name="upload" size={16}/> Cargar Excel</button>
+                          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={importFile}/>
+                        </>}
+                        <button onClick={exportExcel} disabled={!visibleRows.length} className="btn-white rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-2"><Icon name="download" size={16}/> Exportar</button>
+                        <button onClick={() => setModal({ view })} className="btn-primary rounded-xl px-4 py-2 text-sm font-bold flex items-center gap-2"><Icon name="plus" size={16}/> {isPack ? "Nuevo Cambio" : isCitas ? "Nuevo Reporte" : "Nueva Incidencia"}</button>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 flex-wrap items-end">
+                      <div className="relative w-full sm:max-w-xs">
+                        <span className="absolute left-3 top-2.5 text-[var(--text-muted)]"><Icon name="search" size={16}/></span>
+                        <input className="field pl-9" placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)}/>
+                      </div>
+                      <label className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-2">Desde <input type="date" className="field w-auto" value={dateFrom} onChange={e => setDateFrom(e.target.value)}/></label>
+                      <label className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-2">Hasta <input type="date" className="field w-auto" value={dateTo} onChange={e => setDateTo(e.target.value)}/></label>
+                      {!isPack && <select className="field w-full sm:w-auto" value={filter} onChange={e => setFilter(e.target.value)}><option value="">Todos los estados</option>{STATES.map(s => <option key={s}>{s}</option>)}</select>}
+                      {isPack && <select className="field w-full sm:w-auto" value={userFilter} onChange={e => setUserFilter(e.target.value)}><option value="">Todos los usuarios</option>{packUsers.map(u => <option key={u}>{u}</option>)}</select>}
+                      {isPack && <select className="field w-full sm:w-auto" value={proceededFilter} onChange={e => setProceededFilter(e.target.value)}><option value="">Procedió: todos</option><option value="Sí">Sí</option><option value="No">No</option></select>}
+                      
+                      {(search || filter || dateFrom || dateTo || userFilter || proceededFilter) && (
+                        <button onClick={clearFilters} className="bg-[#F37021]/10 hover:bg-[#F37021]/20 border border-[#F37021]/30 text-[#F37021] px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2">
+                          <Icon name="refresh" size={14}/> Limpiar Filtros
+                        </button>
+                      )}
+                    </div>
+
+                    {isAdmin && selectedIds.length > 0 && (
+                      <div className="flex items-center justify-between gap-4 bg-[#E3001B]/10 border border-[#E3001B]/20 rounded-xl px-4 py-2.5 text-sm flex-wrap">
+                        <p className="font-bold text-[#E3001B] tracking-wide">{selectedIds.length} SELECCIONADO(S)</p>
+                        <div className="flex gap-2">
+                          <button onClick={() => setSelectedIds([])} className="px-3 py-1.5 border border-[var(--panel-border)] rounded-lg bg-[var(--card-hover)] hover:bg-[var(--input-bg)] text-xs font-semibold text-[var(--text-muted)] transition">Limpiar Selección</button>
+                          <button onClick={deleteSelected} className="bg-[#E3001B] hover:bg-[#ff0022] px-3 py-1.5 rounded-lg text-xs font-bold text-white flex items-center gap-1 shadow-[0_0_10px_rgba(227,0,27,0.4)] transition"><Icon name="trash" size={14}/> Eliminar</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr>
+                          {isAdmin && <th scope="col" className="w-10"><input ref={headerCheckRef} type="checkbox" className="check" checked={allVisibleSelected} onChange={toggleAllVisible}/></th>}
+                          {isPack ? ["SKU","Descripción","MP Antiguo","MP Nuevo","Fecha","Usuario","Procedió","Estado"].map(h => <th scope="col" key={h}>{h}</th>)
+                           : isCitas ? ["Fecha Rep.","Proveedor","Fecha Cita","Tipo","Descripción","Estado","Tiempo"].map(h => <th scope="col" key={h}>{h}</th>)
+                           : view === "master" ? ["Fecha","SKU","Descripción","Motivo","Estado","Tiempo"].map(h => <th scope="col" key={h}>{h}</th>)
+                           : ["Fecha","Proveedor","Motivo","Observaciones","Estado","Tiempo"].map(h => <th scope="col" key={h}>{h}</th>)}
+                          {isAdmin && <th scope="col">Acciones</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visibleRows.map(row => {
+                          const isCritical = view === "suppliers" && row.status !== "Resuelta" && elapsedDays(row, now) >= 1;
+                          return <tr key={row.id}>
+                            {isAdmin && <td><input type="checkbox" className="check" checked={selectedIds.includes(row.id)} onChange={() => toggleRow(row.id)}/></td>}
+                            {isPack ? <>
+                              <td className="font-bold text-[var(--text-main)]">{row.sku}</td>
+                              <td className="min-w-[200px] text-[var(--text-dark)]">{row.description}</td>
+                              <td className="text-[var(--text-muted)]">{row.oldMP}</td>
+                              <td><span className="bg-[#F37021]/10 border border-[#F37021]/20 text-[#F37021] px-2.5 py-1 rounded-lg font-bold text-xs">{row.newMP}</span></td>
+                              <td className="whitespace-nowrap text-[var(--text-muted)]">{formatDate(row.date)}</td>
+                              <td className="text-[var(--text-dark)]">{row.user}</td>
+                              <td><span className={`px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide ${row.proceeded === 'Sí' ? 'bg-[#009640]/10 text-[#009640] border border-[#009640]/20' : 'bg-[#E3001B]/10 text-[#E3001B] border border-[#E3001B]/20'}`}>{row.proceeded.toUpperCase()}</span></td>
+                              <td><Badge status={row.status || "Pendiente"}/></td>
+                            </> : isCitas ? <>
+                              <td className="text-sm text-[var(--text-muted)]">{formatDate(row.createdAt)}</td>
+                              <td className="font-semibold text-[var(--text-main)]">{row.supplier}</td>
+                              <td className="text-sm text-[var(--text-muted)]">{formatDate(row.appointmentDate)}</td>
+                              <td><span className="bg-[var(--card-hover)] border border-[var(--panel-border)] text-[var(--text-dark)] px-2 py-1 rounded text-xs font-bold">{row.reportType}</span></td>
+                              <td className="min-w-[200px] text-[var(--text-dark)]">{row.description}</td>
+                              <td><Badge status={row.status}/></td>
+                              <td className="whitespace-nowrap text-sm text-[var(--text-muted)]">{elapsedText(row, now)}</td>
+                            </> : view === "master" ? <>
+                              <td className="text-sm text-[var(--text-muted)]">{formatDate(row.createdAt)}</td>
+                              <td className="font-bold text-[var(--text-main)]">{row.sku}</td>
+                              <td className="min-w-[200px] text-[var(--text-dark)]">{row.description}</td>
+                              <td className="min-w-[180px] text-[var(--text-dark)]">{row.reason}</td>
+                              <td><Badge status={row.status}/></td>
+                              <td className="whitespace-nowrap"><p className={isCritical ? "text-[#E3001B] font-bold" : "text-[var(--text-muted)]"}>{elapsedText(row, now)}</p><p className="text-[10px] text-[var(--text-muted)] mt-1">{row.status === "Resuelta" ? "Hasta resolución" : isCritical ? "Atención crítica" : "Transcurrido"}</p></td>
+                            </> : <>
+                              <td className="text-sm text-[var(--text-muted)]">{formatDate(row.createdAt)}</td>
+                              <td className="font-semibold text-[var(--text-main)]">{row.supplier}</td>
+                              <td className="min-w-[150px] text-[var(--text-dark)]">{row.reason}</td>
+                              <td className="min-w-[180px] text-[var(--text-muted)] italic">{row.observations || "—"}</td>
+                              <td><Badge status={row.status}/></td>
+                              <td className="whitespace-nowrap"><p className={isCritical ? "text-[#E3001B] font-bold" : "text-[var(--text-muted)]"}>{elapsedText(row, now)}</p><p className="text-[10px] text-[var(--text-muted)] mt-1">{row.status === "Resuelta" ? "Hasta resolución" : isCritical ? "Atención crítica" : "Transcurrido"}</p></td>
+                            </>}
+                            {isAdmin && <td>{rowActions(row)}</td>}
+                          </tr>;
+                        })}
+                        {!visibleRows.length && <tr><td colSpan={isAdmin ? 10 : 9} className="text-center text-[var(--text-muted)] py-12">No se encontraron registros.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="border-t border-[var(--table-border)] px-6 py-4 text-xs text-[var(--text-muted)] bg-[var(--table-head-bg)] font-medium">
+                    {isPack ? "Use las casillas para seleccionar registros y eliminarlos en bloque." : "Los indicadores consideran todos los registros de esta sección."}
+                  </div>
+                </section>
+              </>
+            )}
+            <footer className="text-xs text-[var(--text-muted)] font-medium py-4 text-center">Agendamiento/slotting · Gestión y seguimiento operativo</footer>
+          </main>
+        </div>
+
+        {modal && <RecordModal modal={modal} onClose={() => setModal(null)} onSave={saveRecord}/>}
+      </div>;
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+</body>
+</html>
