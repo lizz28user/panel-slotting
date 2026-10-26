@@ -15,6 +15,10 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -128,7 +132,6 @@
     .field:focus { outline: none; border-color: var(--orange); box-shadow: 0 0 0 3px rgba(243, 112, 33, 0.2); }
     .field option { background: var(--bg-main); color: var(--text-main); }
 
-    /* Ajustes de tabla para ocupar mejor el espacio */
     th, td { padding: 12px 16px; text-align: left; font-size: 0.95rem; }
     th { color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; background: var(--table-head-bg); font-weight: 800; }
     tbody tr { border-top: 1px solid var(--table-border); transition: background 0.2s; }
@@ -157,17 +160,36 @@
   <div id="root"></div>
 
   <script type="text/babel">
+    // ==========================================
+    // CONFIGURACIÓN DE FIREBASE
+    // ==========================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyAxwSTuBB0nU8WRu9uziOAj35igmGRCYxw",
+      authDomain: "agendamiento-slotting.firebaseapp.com",
+      databaseURL: "https://agendamiento-slotting-default-rtdb.firebaseio.com",
+      projectId: "agendamiento-slotting",
+      storageBucket: "agendamiento-slotting.firebasestorage.app",
+      messagingSenderId: "1071021570654",
+      appId: "1:1071021570654:web:9a94205f2ce4696e38d2cf",
+      measurementId: "G-5HHM6ZBMHK"
+    };
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
+
     const { useState, useEffect, useRef, useMemo } = React;
 
     const STATES = ["Pendiente", "En Proceso", "Resuelta"];
     const SUPPLIER_REASONS = ["No generó su cita", "Cita tardía", "Por límite cubierto"];
     const USER = "Xiomara";
-    const STORAGE_KEY = "slotting_corporativo_v7";
-    const HISTORY_KEY = "slotting_dashboards_history";
-    const EXCEL_HISTORY_KEY = "slotting_excel_history";
+    const DB_DOC_DATA = "slotting_data";
+    const DB_DOC_HISTORY = "slotting_history";
+    const DB_DOC_EXCEL = "slotting_excel_history";
 
     const VIEWS = {
-      resumen: { title: "Resumen Ejecutivo", subtitle: "Visión consolidada del desempeño operativo de todas las áreas.", icon: "trending" },
+      resumen: { title: "Resumen Ejecutivo", subtitle: "Visión consolidada del desempeño operativo semanal.", icon: "trending" },
       master: { title: "Datos Maestros", subtitle: "Control y seguimiento de incidencias de información de productos.", icon: "database" },
       suppliers: { title: "Agendamiento / Proveedores", subtitle: "Seguimiento de citas, proveedores e incidencias de recepción.", icon: "calendar" },
       dashboardCitas: { title: "Dashboard de Citas", subtitle: "Visualización gráfica de la agenda de citas desde Excel.", icon: "chart" },
@@ -178,8 +200,11 @@
     function toDate(value) {
       if (!value) return null;
       if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
-      if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-        const [y, m, d] = value.split("-").map(Number); return new Date(y, m - 1, d);
+      if (typeof value === "string") {
+        const matchDMY = value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+        if (matchDMY) return new Date(matchDMY[3], matchDMY[2] - 1, matchDMY[1]);
+        const matchYMD = value.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+        if (matchYMD) return new Date(matchYMD[1], matchYMD[2] - 1, matchYMD[3]);
       }
       const d = new Date(value); return isNaN(d.getTime()) ? null : d;
     }
@@ -210,18 +235,15 @@
       return d ? d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
     }
 
-    // NUEVO: Función para calcular el rango de la semana actual (Lunes a Domingo)
     function getWeekRange(date = new Date()) {
       const d = new Date(date);
-      const day = d.getDay() === 0 ? 7 : d.getDay(); // 1 = Lunes, 7 = Domingo
+      const day = d.getDay() === 0 ? 7 : d.getDay();
       const diff = d.getDate() - day + 1;
       const start = new Date(d.setDate(diff));
       start.setHours(0,0,0,0);
-      
       const end = new Date(start);
       end.setDate(start.getDate() + 6);
       end.setHours(23,59,59,999);
-      
       return { start, end };
     }
 
@@ -247,22 +269,6 @@
         citas: [ { id: "RC-001", createdAt: hoursAgo(2), supplier: "Laboratorios Portugal", appointmentDate: dateKey(new Date(Date.now() - 86400000)), reportType: "Faltante de mercadería", description: "Faltaron 2 cajas de paracetamol en la descarga.", status: "Pendiente", resolvedAt: null } ],
         packs: [ { id: "MP-001", sku: "100245", description: "Paracetamol 500 mg", oldMP: 12, newMP: 24, date: dateKey(), user: "Xiomara", proceeded: "Sí", status: "Resuelta", resolvedAt: dateKey() } ]
       };
-    }
-
-    function loadData() {
-      try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-        if (saved && ["master","suppliers","citas","packs"].every(k => Array.isArray(saved[k]))) return saved;
-      } catch {}
-      return mockData();
-    }
-
-    function loadHistory() {
-      try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || {}; } catch { return {}; }
-    }
-
-    function loadExcelHistory() {
-      try { return JSON.parse(localStorage.getItem(EXCEL_HISTORY_KEY)) || []; } catch { return []; }
     }
 
     function Icon({ name, size = 20 }) {
@@ -381,7 +387,7 @@
             <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
               <div>
                 <h2 className="text-xl font-bold text-[var(--text-main)]">Carga operativa por área</h2>
-                <p className="text-sm text-[var(--text-muted)] mt-1">Comparativo de estados entre Datos Maestros, Proveedores y Citas.</p>
+                <p className="text-sm text-[var(--text-muted)] mt-1">Comparativo de estados entre Datos Maestros, Proveedores y Citas (Semana actual).</p>
               </div>
               {topArea && topArea.pendientes > 0 && (
                 <span className="bg-[#F37021]/10 border border-[#F37021]/20 text-[#F37021] text-xs font-bold px-3 py-1.5 rounded-lg shadow-[0_0_15px_rgba(243,112,33,0.15)]">
@@ -399,7 +405,7 @@
               <h2 className="text-xl font-bold text-[var(--text-main)]">Cambios de Master Pack</h2>
               <p className="text-sm text-[var(--text-muted)] mt-1">{summary.packsToday} cambio{summary.packsToday === 1 ? "" : "s"} registrado{summary.packsToday === 1 ? "" : "s"} hoy.</p>
             </div>
-            <span className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 text-xs font-bold px-3 py-1.5 rounded-lg">{summary.totalPacks} cambios históricos</span>
+            <span className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 text-xs font-bold px-3 py-1.5 rounded-lg">{summary.totalPacks} cambios esta semana</span>
           </section>
         </div>
       );
@@ -409,7 +415,6 @@
       return String(value ?? "").trim().replace(/\s+/g, " ").toLocaleUpperCase("es-PE");
     }
 
-    // ACTUALIZADO: Filtra las métricas para que solo tomen en cuenta la SEMANA ACTUAL
     function historicalMetrics(dashboardHistory) {
       const { start, end } = getWeekRange();
       
@@ -417,8 +422,8 @@
         .filter(r => r && typeof r === "object")
         .filter(r => {
           if (!r.fecha) return false;
-          const [d, m, y] = r.fecha.split('-').map(Number);
-          const reportDate = new Date(y, m - 1, d);
+          const reportDate = toDate(r.fecha);
+          if (!reportDate) return false;
           return reportDate >= start && reportDate <= end;
         });
 
@@ -458,9 +463,9 @@
       });
 
       overThreeByDay.sort((a, b) => {
-        const [d1, m1, y1] = a.date.split('-');
-        const [d2, m2, y2] = b.date.split('-');
-        return new Date(y2, m2-1, d2) - new Date(y1, m1-1, d1);
+        const dateA = toDate(a.date);
+        const dateB = toDate(b.date);
+        return dateB - dateA;
       });
 
       const sorted = [...providers.values()].sort((a, b) => b.citas - a.citas);
@@ -734,7 +739,6 @@
       );
     }
 
-    // ACTUALIZADO: Filtra los datos para que solo sumen la semana actual
     function MasterPackDashboard({ data }) {
       const pieRef = useRef(null);
 
@@ -942,13 +946,20 @@
 
     function App() {
       const [role, setRole] = useState(null); const [showAdmin, setShowAdmin] = useState(false); const [password, setPassword] = useState(""); const [loginError, setLoginError] = useState("");
-      const [view, setView] = useState("resumen"); const [data, setData] = useState(loadData);
+      const [view, setView] = useState("resumen");
       
+      const [data, setData] = useState({ master: [], suppliers: [], citas: [], packs: [] });
+      const [dashboardHistory, setDashboardHistory] = useState({});
+      const [excelHistory, setExcelHistory] = useState([]); 
+      const [isDbReady, setIsDbReady] = useState(false);
       const [dashboardData, setDashboardData] = useState(null);
-      const [dashboardHistory, setDashboardHistory] = useState(loadHistory);
-      const [excelHistory, setExcelHistory] = useState(loadExcelHistory);
 
-      const [search, setSearch] = useState(""); const [filter, setFilter] = useState(""); const [dateFrom, setDateFrom] = useState(""); const [dateTo, setDateTo] = useState("");
+      const { start: weekStart, end: weekEnd } = getWeekRange();
+      const [search, setSearch] = useState(""); 
+      const [filter, setFilter] = useState(""); 
+      const [dateFrom, setDateFrom] = useState(dateKey(weekStart)); 
+      const [dateTo, setDateTo] = useState(dateKey(weekEnd));
+      
       const [userFilter, setUserFilter] = useState(""); const [proceededFilter, setProceededFilter] = useState("");
       const [selectedIds, setSelectedIds] = useState([]); const [modal, setModal] = useState(null); const [notice, setNotice] = useState("");
       const [importReport, setImportReport] = useState(null); const [storageError, setStorageError] = useState(""); const [now, setNow] = useState(Date.now());
@@ -963,28 +974,68 @@
       const isAdmin = role === "Admin"; const isPack = view === "packs"; const isCitas = view === "citas"; const rows = data[view] || [];
       const currentDay = dateKey(new Date(now));
 
+      // --- CONEXIÓN EN TIEMPO REAL A FIREBASE (CORREGIDA) ---
+      useEffect(() => {
+        const unsubData = db.collection('slotting').doc(DB_DOC_DATA).onSnapshot(doc => {
+          if (doc.exists) {
+            setData(doc.data());
+          } else {
+            db.collection('slotting').doc(DB_DOC_DATA).set(mockData());
+          }
+        }, error => setStorageError("Error de conexión a Firestore. Revisa las reglas de seguridad."));
+        
+        const unsubHistory = db.collection('slotting').doc(DB_DOC_HISTORY).onSnapshot(doc => {
+          if (doc.exists) setDashboardHistory(doc.data());
+        });
+        
+        // CORRECCIÓN: Firestore no acepta arrays en la raíz del documento, se envuelve en un objeto { history: [] }
+        const unsubExcel = db.collection('slotting').doc(DB_DOC_EXCEL).onSnapshot(doc => {
+          if (doc.exists && doc.data().history) {
+            setExcelHistory(doc.data().history);
+          } else {
+            setExcelHistory([]);
+          }
+        });
+        
+        setIsDbReady(true);
+        return () => { unsubData(); unsubHistory(); unsubExcel(); };
+      }, []);
+
+      // Guardar en Firebase cuando cambia el estado
+      useEffect(() => { if (isDbReady) db.collection('slotting').doc(DB_DOC_DATA).set(data).catch(e => setStorageError("Error al guardar. Revisa permisos en Firebase.")); }, [data, isDbReady]);
+      useEffect(() => { if (isDbReady) db.collection('slotting').doc(DB_DOC_HISTORY).set(dashboardHistory).catch(e => console.log(e)); }, [dashboardHistory, isDbReady]);
+      // CORRECCIÓN: Se envuelve el array excelHistory en un objeto antes de guardarlo
+      useEffect(() => { if (isDbReady) db.collection('slotting').doc(DB_DOC_EXCEL).set({ history: excelHistory }).catch(e => console.log(e)); }, [excelHistory, isDbReady]);
+
       useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('slotting_theme', theme);
       }, [theme]);
 
-      useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); setStorageError(""); } catch { setStorageError("No se pudo guardar localmente."); } }, [data]);
-      useEffect(() => { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(dashboardHistory)); } catch {} }, [dashboardHistory]);
-      useEffect(() => { try { localStorage.setItem(EXCEL_HISTORY_KEY, JSON.stringify(excelHistory)); } catch {} }, [excelHistory]);
-      
       useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(timer); }, []);
       useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(""), 5000); return () => clearTimeout(timer); }, [notice]);
       useEffect(() => { setSelectedIds(prev => { const next = prev.filter(id => rows.some(r => r.id === id)); return next.length === prev.length ? prev : next; }); }, [rows]);
 
       function handleRefresh() {
-        setData(loadData());
-        setDashboardHistory(loadHistory());
-        setExcelHistory(loadExcelHistory());
         setNow(Date.now());
-        setNotice("Datos actualizados correctamente.");
+        setNotice("Datos sincronizados con la nube.");
       }
 
-      function navigate(next) { setView(next); setSearch(""); setFilter(""); setDateFrom(""); setDateTo(""); setUserFilter(""); setProceededFilter(""); setSelectedIds([]); setImportReport(null); setPackDateFilter(""); }
+      function navigate(next) { 
+        setView(next); 
+        setSearch(""); 
+        setFilter(""); 
+        setUserFilter(""); 
+        setProceededFilter(""); 
+        setSelectedIds([]); 
+        setImportReport(null); 
+        setPackDateFilter(""); 
+        
+        const { start, end } = getWeekRange();
+        setDateFrom(dateKey(start));
+        setDateTo(dateKey(end));
+      }
+      
       function login(e) { e.preventDefault(); if (password !== "admin123") return setLoginError("Contraseña incorrecta"); setRole("Admin"); setPassword(""); setLoginError(""); }
       function logout() { setRole(null); setShowAdmin(false); setPassword(""); setLoginError(""); setModal(null); setNotice(""); setImportReport(null); setSelectedIds([]); navigate("master"); }
 
@@ -993,10 +1044,10 @@
         const target = modal.view; const prefix = target === "master" ? "DM" : target === "suppliers" ? "AG" : target === "citas" ? "RC" : "MP";
         const saved = { ...record, id: modal.record?.id || uid(prefix) };
         setData(prev => ({ ...prev, [target]: modal.record ? prev[target].map(r => r.id === saved.id ? saved : r) : [saved, ...prev[target]] }));
-        setNotice("Guardado correctamente."); setModal(null); setNow(Date.now());
+        setNotice("Guardado en la nube."); setModal(null); setNow(Date.now());
       }
 
-      function deleteRecord(row) { if (!isAdmin) return; if (!confirm("¿Eliminar registro?")) return; setData(prev => ({ ...prev, [view]: prev[view].filter(i => i.id !== row.id) })); setNotice("Eliminado."); }
+      function deleteRecord(row) { if (!isAdmin) return; if (!confirm("¿Eliminar registro?")) return; setData(prev => ({ ...prev, [view]: prev[view].filter(i => i.id !== row.id) })); setNotice("Eliminado de la nube."); }
       function deleteSelected() { if (!isAdmin || !selectedIds.length) return; if (!confirm(`¿Eliminar ${selectedIds.length} registros?`)) return; const s = new Set(selectedIds); setData(prev => ({ ...prev, [view]: prev[view].filter(i => !s.has(i.id)) })); setSelectedIds([]); setNotice("Eliminados."); }
       function toggleRow(id) { setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]); }
       function toggleAllVisible() { if (allVisibleSelected) { const s = new Set(visibleRows.map(r => r.id)); setSelectedIds(prev => prev.filter(id => !s.has(id))); } else { const ids = visibleRows.map(r => r.id); setSelectedIds(prev => [...new Set([...prev, ...ids])]); } }
@@ -1021,7 +1072,7 @@
 
       function clearFilters() {
         setSearch(""); setFilter(""); setDateFrom(""); setDateTo(""); setUserFilter(""); setProceededFilter("");
-        setNotice("Filtros restablecidos.");
+        setNotice("Filtros restablecidos. Mostrando histórico completo.");
       }
 
       /* ---------- FUNCIONES DE HISTORIAL DE DASHBOARD ---------- */
@@ -1029,11 +1080,7 @@
         if (!dashData || !dashData.fecha) return;
         setDashboardHistory(prev => ({ ...prev, [dashData.fecha]: dashData }));
         
-        let parsedDate = new Date();
-        if (dashData.fecha) {
-          const parts = dashData.fecha.split('-');
-          if (parts.length === 3) parsedDate = new Date(parts[2], parts[1] - 1, parts[0]);
-        }
+        let parsedDate = toDate(dashData.fecha) || new Date();
         const createdAt = parsedDate.toISOString();
         
         const existing = new Set(data.suppliers.filter(row => row.status === "Pendiente").map(row => supplierKey(row.supplier)));
@@ -1054,7 +1101,7 @@
         }
         
         if (incidents.length) setData(prev => ({ ...prev, suppliers: [...incidents, ...prev.suppliers] }));
-        setNotice(`Reporte guardado. Se generaron ${incidents.length} incidencias (Fecha: ${dashData.fecha}).`);
+        setNotice(`Reporte guardado en la nube. Se generaron ${incidents.length} incidencias.`);
       }
 
       function handleLoadHistory(dateKey) {
@@ -1082,9 +1129,15 @@
           const buffer = await file.arrayBuffer();
           const book = XLSX.read(buffer, { type: "array" });
           
-          let fechaStr = "CITAS";
-          const match = file.name.match(/\((\d{2}-\d{2}-\d{4})\)/);
-          if (match) fechaStr = match[1];
+          let fechaStr = dateKey();
+          const matchDMY = file.name.match(/(\d{1,2})[-_/](\d{1,2})[-_/](\d{4})/);
+          const matchYMD = file.name.match(/(\d{4})[-_/](\d{1,2})[-_/](\d{1,2})/);
+          
+          if (matchDMY) {
+            fechaStr = `${matchDMY[1].padStart(2, '0')}-${matchDMY[2].padStart(2, '0')}-${matchDMY[3]}`;
+          } else if (matchYMD) {
+            fechaStr = `${matchYMD[3].padStart(2, '0')}-${matchYMD[2].padStart(2, '0')}-${matchYMD[1]}`;
+          }
 
           const sheet1 = book.Sheets["AGENDA 01"];
           if (!sheet1) throw new Error("No se encontró la hoja AGENDA 01");
@@ -1334,7 +1387,7 @@
       return <div className="min-h-screen font-sans text-[var(--text-main)] selection:bg-[#E3001B] selection:text-white">
         {/* HEADER */}
         <header className="glass-panel border-0 border-b border-[var(--panel-border)] rounded-none sticky top-0 z-50 transition-colors duration-300" style={{ background: 'var(--header-bg)' }}>
-          <div className="w-full max-w-[1920px] mx-auto px-5 sm:px-8 py-3 flex justify-between items-center gap-4 flex-wrap">
+          <div className="w-full px-5 sm:px-8 py-3 flex justify-between items-center gap-4 flex-wrap">
             <div className="flex items-center gap-4">
               <div className="bg-[#E3001B] p-3 rounded-xl shadow-[0_0_15px_rgba(227,0,27,0.4)]"><Icon name="box" size={24}/></div>
               <div>
@@ -1369,7 +1422,7 @@
           </div>
         </header>
 
-        <div className="w-full max-w-[1920px] mx-auto lg:flex min-h-[calc(100vh-85px)]">
+        <div className="w-full lg:flex min-h-[calc(100vh-85px)]">
           {/* SIDEBAR */}
           <aside className="app-sidebar lg:w-64 shrink-0 p-4 lg:p-5 z-40 transition-all">
             <p className="hidden lg:block text-[10px] font-bold tracking-widest text-[var(--text-muted)] px-3 mt-3 mb-5 uppercase">Menú Principal</p>
