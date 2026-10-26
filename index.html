@@ -16,9 +16,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   
-  <!-- Firebase SDK -->
+  <!-- Firebase SDK (Firestore y Realtime Database) -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -177,7 +178,9 @@
     if (!firebase.apps.length) {
       firebase.initializeApp(firebaseConfig);
     }
+    
     const db = firebase.firestore();
+    const rtdb = firebase.database(); // Usaremos Realtime Database para el catálogo grande
 
     const { useState, useEffect, useRef, useMemo } = React;
 
@@ -187,7 +190,6 @@
     const DB_DOC_DATA = "slotting_data";
     const DB_DOC_HISTORY = "slotting_history";
     const DB_DOC_EXCEL = "slotting_excel_history";
-    const DB_DOC_CATALOG = "catalogo_productos";
 
     const VIEWS = {
       resumen: { title: "Resumen Ejecutivo", subtitle: "Visión consolidada del desempeño operativo semanal.", icon: "trending" },
@@ -867,9 +869,9 @@
               <p className="text-3xl font-black text-[var(--text-main)]">{entries.length.toLocaleString('es-PE')}</p>
             </div>
             <div className="glass-panel p-5 text-center">
-              <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">Tamaño en Firestore</p>
-              <p className={`text-3xl font-black ${sizeKb > 800 ? 'text-[#F37021]' : 'text-[#009640]'}`}>{sizeKb} KB</p>
-              <p className="text-[10px] text-[var(--text-muted)] mt-1">Límite 1.000 KB</p>
+              <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">Tamaño en RTDB</p>
+              <p className={`text-3xl font-black text-[#009640]`}>{sizeKb} KB</p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-1">Sin límite estricto</p>
             </div>
             <div className="glass-panel p-5 text-center">
               <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">Estado</p>
@@ -950,13 +952,26 @@
     function RecordModal({ modal, onClose, onSave, catalog }) {
       const isPack = modal.view === "packs"; const isMaster = modal.view === "master"; const isCitas = modal.view === "citas";
       const dialog = useRef(null); const [error, setError] = useState("");
+      
+      // Estado inicial separado según la vista
       const [form, setForm] = useState(() => {
         if (modal.record) {
           if (isPack) return { ...modal.record, proceeded: modal.record.proceeded || "Sí", status: modal.record.status || "Pendiente" };
           return { ...modal.record, createdAt: dateKey(modal.record.createdAt), appointmentDate: modal.record.appointmentDate || "", resolvedAt: modal.record.resolvedAt ? dateKey(modal.record.resolvedAt) : "" };
         }
-        return isPack ? { sku: "", description: "", oldMP: "", newMP: "", date: dateKey(), user: USER, proceeded: "Sí", status: "Resuelta", resolvedAt: dateKey() } 
-                      : { createdAt: dateKey(), supplier: "", appointmentDate: dateKey(), reportType: "", description: "", reason: "No generó su cita", observations: "", status: "Pendiente", resolvedAt: "" };
+        
+        if (isPack) {
+          return { sku: "", description: "", oldMP: "", newMP: "", date: dateKey(), user: USER, proceeded: "Sí", status: "Resuelta", resolvedAt: dateKey() };
+        }
+        if (isMaster) {
+          return { createdAt: dateKey(), sku: "", description: "", reason: "", status: "Pendiente", resolvedAt: "" };
+        }
+        if (isCitas) {
+          return { createdAt: dateKey(), supplier: "", appointmentDate: dateKey(), reportType: "", description: "", reason: "", status: "Pendiente", resolvedAt: "" };
+        }
+        
+        // Proveedores
+        return { createdAt: dateKey(), supplier: "", reason: "No generó su cita", observations: "", status: "Pendiente", resolvedAt: "" };
       });
 
       useEffect(() => { const prev = document.activeElement; const overflow = document.body.style.overflow; document.body.style.overflow = "hidden"; dialog.current.showModal(); return () => { document.body.style.overflow = overflow; prev?.focus?.(); }; }, []);
@@ -1015,6 +1030,7 @@
 
         const required = isPack ? ["sku", "description", "user"] : isMaster ? ["sku", "description", "reason"] : isCitas ? ["supplier", "appointmentDate", "reportType", "description"] : ["supplier", "reason"];
         if (required.some(k => !String(form[k] || "").trim())) return setError("Completa todos los campos requeridos.");
+        
         const cleaned = { ...form };
         required.forEach(k => cleaned[k] = String(form[k]).trim());
 
@@ -1099,7 +1115,10 @@
                 />
               </label>
 
-              <label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">Motivo<textarea className="field mt-2" rows="3" name="reason" required value={form.reason} onChange={change}/></label>
+              <label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">
+                Motivo
+                <textarea className="field mt-2" rows="3" name="reason" required value={form.reason || ""} onChange={change}/>
+              </label>
             </> 
             : isCitas ? <>{field("Proveedor", "supplier", "text", {autoFocus:true})}{field("Fecha de la Cita", "appointmentDate", "date")}{field("Tipo de Reporte", "reportType")}<label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">Descripción<textarea className="field mt-2" rows="3" name="description" required value={form.description} onChange={change}/></label></>
             : <>
@@ -1182,21 +1201,21 @@
           }
         });
 
-        const unsubCatalog = db.collection('slotting').doc(DB_DOC_CATALOG).onSnapshot(
-          doc => {
-            if (doc.exists) {
-              const products = doc.data().products || {};
-              setCatalog(products);
-              try { localStorage.setItem('slotting_catalogo', JSON.stringify(products)); } catch(e){}
-            } else {
-              setCatalog({});
-            }
-          },
-          err => console.warn('Catálogo no disponible:', err.message)
-        );
+        // LECTURA DEL CATÁLOGO DESDE REALTIME DATABASE
+        const refCatalog = rtdb.ref('catalogo');
+        const callbackCatalog = refCatalog.on('value', snapshot => {
+          const products = snapshot.val() || {};
+          setCatalog(products);
+          try { localStorage.setItem('slotting_catalogo', JSON.stringify(products)); } catch(e){}
+        }, err => console.warn('Catálogo no disponible:', err.message));
         
         setIsDbReady(true);
-        return () => { unsubData(); unsubHistory(); unsubExcel(); unsubCatalog(); };
+        return () => { 
+          unsubData(); 
+          unsubHistory(); 
+          unsubExcel(); 
+          refCatalog.off('value', callbackCatalog);
+        };
       }, []);
 
       // Guardar en Firebase cuando cambia el estado
@@ -1344,17 +1363,9 @@
           const total = Object.keys(products).length;
           if (total === 0) return setNotice("No se detectaron columnas 'SKU' / 'Descripción'.");
 
-          const sizeBytes = new Blob([JSON.stringify(products)]).size;
-          if (sizeBytes > 950000) {
-            return setNotice(`Catálogo demasiado grande (${Math.round(sizeBytes/1024)} KB). Divídelo en dos archivos.`);
-          }
-
-          await db.collection('slotting').doc(DB_DOC_CATALOG).set({
-            products,
-            total,
-            fileName: file.name,
-            updatedAt: new Date().toISOString()
-          });
+          // GUARDAR EN REALTIME DATABASE (Sin límite de 1MB)
+          await rtdb.ref('catalogo').set(products);
+          
           try { localStorage.setItem('slotting_catalogo', JSON.stringify(products)); } catch(e){}
           setCatalog(products);
           setNotice(`Catálogo cargado: ${total.toLocaleString('es-PE')} SKUs (${skipped} filas omitidas).`);
@@ -1368,9 +1379,9 @@
         if (!isAdmin) return setNotice("Solo el administrador puede vaciar el catálogo.");
         if (!confirm("¿Vaciar todo el catálogo? Los usuarios no podrán registrar incidencias de master hasta subir uno nuevo.")) return;
         try {
-          await db.collection('slotting').doc(DB_DOC_CATALOG).set({
-            products: {}, total: 0, updatedAt: new Date().toISOString()
-          });
+          // VACIAR EN REALTIME DATABASE
+          await rtdb.ref('catalogo').set(null);
+          
           try { localStorage.removeItem('slotting_catalogo'); } catch(e){}
           setCatalog({});
           setNotice("Catálogo vaciado.");
