@@ -16,7 +16,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   
-  <!-- Firebase SDK (Firestore y Realtime Database) -->
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -180,7 +180,7 @@
     }
     
     const db = firebase.firestore();
-    const rtdb = firebase.database(); // Usaremos Realtime Database para el catálogo grande
+    const rtdb = firebase.database();
 
     const { useState, useEffect, useRef, useMemo } = React;
 
@@ -272,6 +272,18 @@
         suppliers: [ { id: "AG-001", createdAt: hoursAgo(10), supplier: "Laboratorios Portugal", reason: "No generó su cita", observations: "Sin respuesta del proveedor", status: "Pendiente", resolvedAt: null } ],
         citas: [ { id: "RC-001", createdAt: hoursAgo(2), supplier: "Laboratorios Portugal", appointmentDate: dateKey(new Date(Date.now() - 86400000)), reportType: "Faltante de mercadería", description: "Faltaron 2 cajas de paracetamol en la descarga.", status: "Pendiente", resolvedAt: null } ],
         packs: [ { id: "MP-001", sku: "100245", description: "Paracetamol 500 mg", oldMP: 12, newMP: 24, date: dateKey(), user: "Xiomara", proceeded: "Sí", status: "Resuelta", resolvedAt: dateKey() } ]
+      };
+    }
+
+    // Función auxiliar para normalizar el producto sin importar si viene como string (versión antigua) o como objeto
+    function normalizeProduct(val) {
+      if (!val) return { description: "", mp: "", undsPallet: "", cargaTitan: "" };
+      if (typeof val === 'string') return { description: val, mp: "", undsPallet: "", cargaTitan: "" };
+      return {
+        description: String(val.description || ""),
+        mp: String(val.mp || ""),
+        undsPallet: String(val.undsPallet || ""),
+        cargaTitan: String(val.cargaTitan || "")
       };
     }
 
@@ -848,16 +860,23 @@
     }
 
     // ==========================================
-    // CATÁLOGO DE PRODUCTOS (SKU → Descripción)
+    // CATÁLOGO DE PRODUCTOS (SKU → Descripción, MP, Unds Pallet, Carga Titan)
     // ==========================================
     function CatalogoView({ catalog, onUpload, onClear, onExport, isAdmin }) {
       const fileRef = useRef(null);
       const [search, setSearch] = useState("");
       const entries = Object.entries(catalog);
       const q = search.trim().toLowerCase();
+      
       const filtered = q
-        ? entries.filter(([sku, desc]) =>
-            sku.toLowerCase().includes(q) || desc.toLowerCase().includes(q))
+        ? entries.filter(([sku, data]) => {
+            const d = normalizeProduct(data);
+            return sku.toLowerCase().includes(q) ||
+                   d.description.toLowerCase().includes(q) ||
+                   d.mp.toLowerCase().includes(q) ||
+                   d.undsPallet.toLowerCase().includes(q) ||
+                   d.cargaTitan.toLowerCase().includes(q);
+          })
         : entries;
       const sizeKb = Math.round(JSON.stringify(catalog).length / 1024);
 
@@ -911,29 +930,38 @@
           <div className="glass-panel p-4">
             <div className="relative">
               <span className="absolute left-3 top-2.5 text-[var(--text-muted)]"><Icon name="search" size={16}/></span>
-              <input className="field pl-9" placeholder="Buscar por SKU o descripción..." value={search} onChange={e => setSearch(e.target.value)}/>
+              <input className="field pl-9" placeholder="Buscar por SKU, descripción, MP, Pallet o Carga Titan..." value={search} onChange={e => setSearch(e.target.value)}/>
             </div>
           </div>
 
           <div className="glass-panel overflow-hidden">
             <div className="overflow-x-auto max-h-[600px]">
-              <table className="w-full">
+              <table className="w-full whitespace-nowrap">
                 <thead className="sticky top-0 bg-[var(--table-head-bg)] backdrop-blur-md z-10">
                   <tr>
-                    <th className="text-left w-40">SKU</th>
-                    <th className="text-left">Descripción</th>
+                    <th className="text-left w-32">SKU</th>
+                    <th className="text-left min-w-[200px]">Descripción</th>
+                    <th className="text-center">MP</th>
+                    <th className="text-center">Unds PALLET</th>
+                    <th className="text-center">CARGA TITAN</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.slice(0, 500).map(([sku, desc]) => (
-                    <tr key={sku}>
-                      <td className="font-bold text-[var(--text-main)]">{sku}</td>
-                      <td className="text-[var(--text-dark)]">{desc}</td>
-                    </tr>
-                  ))}
+                  {filtered.slice(0, 500).map(([sku, data]) => {
+                    const d = normalizeProduct(data);
+                    return (
+                      <tr key={sku}>
+                        <td className="font-bold text-[var(--text-main)]">{sku}</td>
+                        <td className="text-[var(--text-dark)]">{d.description}</td>
+                        <td className="text-center font-semibold text-blue-400">{d.mp || "—"}</td>
+                        <td className="text-center font-semibold text-[#F37021]">{d.undsPallet || "—"}</td>
+                        <td className="text-center font-semibold text-purple-400">{d.cargaTitan || "—"}</td>
+                      </tr>
+                    );
+                  })}
                   {!filtered.length && (
-                    <tr><td colSpan="2" className="text-center py-10 text-[var(--text-muted)]">
-                      {entries.length ? "Sin coincidencias." : "Aún no se ha cargado un catálogo. El administrador debe subir un Excel con columnas 'SKU' y 'Descripción'."}
+                    <tr><td colSpan="5" className="text-center py-10 text-[var(--text-muted)]">
+                      {entries.length ? "Sin coincidencias." : "Aún no se ha cargado un catálogo. El administrador debe subir un Excel con las columnas correspondientes."}
                     </td></tr>
                   )}
                 </tbody>
@@ -953,7 +981,6 @@
       const isPack = modal.view === "packs"; const isMaster = modal.view === "master"; const isCitas = modal.view === "citas";
       const dialog = useRef(null); const [error, setError] = useState("");
       
-      // Estado inicial separado según la vista
       const [form, setForm] = useState(() => {
         if (modal.record) {
           if (isPack) return { ...modal.record, proceeded: modal.record.proceeded || "Sí", status: modal.record.status || "Pendiente" };
@@ -970,20 +997,19 @@
           return { createdAt: dateKey(), supplier: "", appointmentDate: dateKey(), reportType: "", description: "", reason: "", status: "Pendiente", resolvedAt: "" };
         }
         
-        // Proveedores
         return { createdAt: dateKey(), supplier: "", reason: "No generó su cita", observations: "", status: "Pendiente", resolvedAt: "" };
       });
 
       useEffect(() => { const prev = document.activeElement; const overflow = document.body.style.overflow; document.body.style.overflow = "hidden"; dialog.current.showModal(); return () => { document.body.style.overflow = overflow; prev?.focus?.(); }; }, []);
 
-      // Estado del SKU en el catálogo (solo para master)
       const skuStatus = useMemo(() => {
         if (!isMaster) return null;
         const key = String(form.sku || "").trim().toUpperCase();
         if (!key) return null;
-        return catalog[key]
-          ? { valid: true, description: catalog[key] }
-          : { valid: false };
+        const raw = catalog[key];
+        if (!raw) return { valid: false };
+        const prod = normalizeProduct(raw);
+        return { valid: true, ...prod };
       }, [isMaster, form.sku, catalog]);
 
       function change(e) {
@@ -991,10 +1017,10 @@
         setForm(prev => {
           const next = { ...prev, [name]: value };
           
-          // Autocompletar descripción en master desde el catálogo
           if (isMaster && name === "sku") {
             const key = String(value).trim().toUpperCase();
-            next.description = key && catalog[key] ? catalog[key] : "";
+            const raw = catalog[key];
+            next.description = raw ? normalizeProduct(raw).description : "";
           }
 
           if (isPack) {
@@ -1016,7 +1042,6 @@
       function submit(e) {
         e.preventDefault();
 
-        // Validación del catálogo antes que nada (solo master)
         if (isMaster) {
           const key = String(form.sku || "").trim().toUpperCase();
           if (!key) return setError("El SKU es obligatorio.");
@@ -1036,7 +1061,8 @@
 
         if (isMaster) {
           cleaned.sku = String(form.sku).trim().toUpperCase();
-          cleaned.description = catalog[cleaned.sku]; // Descripción forzada del catálogo
+          const raw = catalog[cleaned.sku];
+          cleaned.description = raw ? normalizeProduct(raw).description : "";
         }
 
         if (isPack) {
@@ -1115,6 +1141,24 @@
                 />
               </label>
 
+              {/* MOSTRAR INFO EXTRA DEL CATÁLOGO EN EL MODAL */}
+              {skuStatus && skuStatus.valid && (
+                <div className="grid grid-cols-3 gap-2 mb-4 bg-[var(--table-head-bg)] p-3 rounded-xl border border-[var(--panel-border)]">
+                  <div>
+                    <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase">MP</p>
+                    <p className="text-sm font-semibold text-[var(--text-main)]">{skuStatus.mp || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase">Unds PALLET</p>
+                    <p className="text-sm font-semibold text-[var(--text-main)]">{skuStatus.undsPallet || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase">CARGA TITAN</p>
+                    <p className="text-sm font-semibold text-[var(--text-main)]">{skuStatus.cargaTitan || "—"}</p>
+                  </div>
+                </div>
+              )}
+
               <label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">
                 Motivo
                 <textarea className="field mt-2" rows="3" name="reason" required value={form.reason || ""} onChange={change}/>
@@ -1151,7 +1195,7 @@
       const [isDbReady, setIsDbReady] = useState(false);
       const [dashboardData, setDashboardData] = useState(null);
 
-      // Catálogo de productos (SKU → Descripción) con caché localStorage
+      // Catálogo de productos (SKU → Objeto) con caché localStorage
       const [catalog, setCatalog] = useState(() => {
         try {
           const cache = localStorage.getItem('slotting_catalogo');
@@ -1356,14 +1400,23 @@
               row.Descripción ?? row["Descripción"] ?? row.descripcion ??
               row.Description ?? row.Producto ?? row.producto ?? row.Nombre ?? ""
             ).trim();
-            if (sku && desc) products[sku] = desc;
+            const mp = String(
+              row.MP ?? row.mp ?? row["Master Pack"] ?? row["Master pack"] ?? ""
+            ).trim();
+            const undsPallet = String(
+              row["Unds PALLET"] ?? row["Unds Pallet"] ?? row.undsPallet ?? row["Pallet"] ?? ""
+            ).trim();
+            const cargaTitan = String(
+              row["CARGA TITAN"] ?? row["Carga Titan"] ?? row.cargaTitan ?? row["Titan"] ?? ""
+            ).trim();
+
+            if (sku && desc) products[sku] = { description: desc, mp, undsPallet, cargaTitan };
             else skipped++;
           });
 
           const total = Object.keys(products).length;
-          if (total === 0) return setNotice("No se detectaron columnas 'SKU' / 'Descripción'.");
+          if (total === 0) return setNotice("No se detectaron columnas válidas.");
 
-          // GUARDAR EN REALTIME DATABASE (Sin límite de 1MB)
           await rtdb.ref('catalogo').set(products);
           
           try { localStorage.setItem('slotting_catalogo', JSON.stringify(products)); } catch(e){}
@@ -1379,7 +1432,6 @@
         if (!isAdmin) return setNotice("Solo el administrador puede vaciar el catálogo.");
         if (!confirm("¿Vaciar todo el catálogo? Los usuarios no podrán registrar incidencias de master hasta subir uno nuevo.")) return;
         try {
-          // VACIAR EN REALTIME DATABASE
           await rtdb.ref('catalogo').set(null);
           
           try { localStorage.removeItem('slotting_catalogo'); } catch(e){}
@@ -1394,7 +1446,11 @@
       function handleCatalogExport() {
         if (!Object.keys(catalog).length) return;
         if (!window.XLSX) return setNotice("XLSX no disponible.");
-        const rows = [["SKU", "Descripción"], ...Object.entries(catalog)];
+        const rows = [["SKU", "Descripción", "MP", "Unds PALLET", "CARGA TITAN"]];
+        Object.entries(catalog).forEach(([sku, data]) => {
+          const p = normalizeProduct(data);
+          rows.push([sku, p.description, p.mp, p.undsPallet, p.cargaTitan]);
+        });
         const ws = XLSX.utils.aoa_to_sheet(rows);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Catálogo");
