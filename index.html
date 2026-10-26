@@ -974,7 +974,7 @@
       const isAdmin = role === "Admin"; const isPack = view === "packs"; const isCitas = view === "citas"; const rows = data[view] || [];
       const currentDay = dateKey(new Date(now));
 
-      // --- CONEXIÓN EN TIEMPO REAL A FIREBASE (CORREGIDA) ---
+      // --- CONEXIÓN EN TIEMPO REAL A FIREBASE ---
       useEffect(() => {
         const unsubData = db.collection('slotting').doc(DB_DOC_DATA).onSnapshot(doc => {
           if (doc.exists) {
@@ -988,7 +988,6 @@
           if (doc.exists) setDashboardHistory(doc.data());
         });
         
-        // CORRECCIÓN: Firestore no acepta arrays en la raíz del documento, se envuelve en un objeto { history: [] }
         const unsubExcel = db.collection('slotting').doc(DB_DOC_EXCEL).onSnapshot(doc => {
           if (doc.exists && doc.data().history) {
             setExcelHistory(doc.data().history);
@@ -1004,7 +1003,6 @@
       // Guardar en Firebase cuando cambia el estado
       useEffect(() => { if (isDbReady) db.collection('slotting').doc(DB_DOC_DATA).set(data).catch(e => setStorageError("Error al guardar. Revisa permisos en Firebase.")); }, [data, isDbReady]);
       useEffect(() => { if (isDbReady) db.collection('slotting').doc(DB_DOC_HISTORY).set(dashboardHistory).catch(e => console.log(e)); }, [dashboardHistory, isDbReady]);
-      // CORRECCIÓN: Se envuelve el array excelHistory en un objeto antes de guardarlo
       useEffect(() => { if (isDbReady) db.collection('slotting').doc(DB_DOC_EXCEL).set({ history: excelHistory }).catch(e => console.log(e)); }, [excelHistory, isDbReady]);
 
       useEffect(() => {
@@ -1094,7 +1092,7 @@
           incidents.push({
             id: uid("AG"), createdAt, supplier, 
             reason: "No generó su cita", 
-            observations: "Generado automáticamente desde Dashboard",
+            observations: "", // <-- CAMBIO APLICADO: Se deja en blanco
             status: "Resuelta", resolvedAt: createdAt, 
             evidence: "Cierre automático", closureNote: "Registrado al guardar Dashboard"
           });
