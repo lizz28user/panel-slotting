@@ -187,6 +187,7 @@
     const DB_DOC_DATA = "slotting_data";
     const DB_DOC_HISTORY = "slotting_history";
     const DB_DOC_EXCEL = "slotting_excel_history";
+    const DB_DOC_CATALOG = "catalogo_productos";
 
     const VIEWS = {
       resumen: { title: "Resumen Ejecutivo", subtitle: "Visión consolidada del desempeño operativo semanal.", icon: "trending" },
@@ -194,7 +195,8 @@
       suppliers: { title: "Agendamiento / Proveedores", subtitle: "Seguimiento de citas, proveedores e incidencias de recepción.", icon: "calendar" },
       dashboardCitas: { title: "Dashboard de Citas", subtitle: "Visualización gráfica de la agenda de citas desde Excel.", icon: "chart" },
       citas: { title: "Mis Reportes de Cita", subtitle: "Indicadores semanales y ranking de proveedores.", icon: "clipboard" },
-      packs: { title: "Cambios de Master Pack", subtitle: "Historial de actualizaciones de unidades por empaque.", icon: "box" }
+      packs: { title: "Cambios de Master Pack", subtitle: "Historial de actualizaciones de unidades por empaque.", icon: "box" },
+      catalogo: { title: "Catálogo de Productos", subtitle: "SKUs y descripciones para validación automática de incidencias.", icon: "book" }
     };
 
     function toDate(value) {
@@ -290,7 +292,10 @@
         save: <><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>,
         refresh: <><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.85.8 6.75 2.15M21 3v6h-6"/></>,
         palette: <><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></>,
-        file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>
+        file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>,
+        book: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></>,
+        check: <path d="m5 12 5 5L20 7"/>,
+        alert: <><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></>
       };
       return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{paths[name] || paths.box}</svg>;
     }
@@ -840,7 +845,109 @@
       );
     }
 
-    function RecordModal({ modal, onClose, onSave }) {
+    // ==========================================
+    // CATÁLOGO DE PRODUCTOS (SKU → Descripción)
+    // ==========================================
+    function CatalogoView({ catalog, onUpload, onClear, onExport, isAdmin }) {
+      const fileRef = useRef(null);
+      const [search, setSearch] = useState("");
+      const entries = Object.entries(catalog);
+      const q = search.trim().toLowerCase();
+      const filtered = q
+        ? entries.filter(([sku, desc]) =>
+            sku.toLowerCase().includes(q) || desc.toLowerCase().includes(q))
+        : entries;
+      const sizeKb = Math.round(JSON.stringify(catalog).length / 1024);
+
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="glass-panel p-5 text-center">
+              <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">Total SKUs</p>
+              <p className="text-3xl font-black text-[var(--text-main)]">{entries.length.toLocaleString('es-PE')}</p>
+            </div>
+            <div className="glass-panel p-5 text-center">
+              <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">Tamaño en Firestore</p>
+              <p className={`text-3xl font-black ${sizeKb > 800 ? 'text-[#F37021]' : 'text-[#009640]'}`}>{sizeKb} KB</p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-1">Límite 1.000 KB</p>
+            </div>
+            <div className="glass-panel p-5 text-center">
+              <p className="text-[10px] font-bold text-[var(--text-muted)] tracking-wider mb-1 uppercase">Estado</p>
+              <p className={`text-xl font-black ${entries.length > 0 ? 'text-[#009640]' : 'text-[#E3001B]'}`}>
+                {entries.length > 0 ? '✓ ACTIVO' : '⚠ SIN CATÁLOGO'}
+              </p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-1">
+                {entries.length > 0 ? 'Validación habilitada' : 'Master bloqueado'}
+              </p>
+            </div>
+          </div>
+
+          {isAdmin ? (
+            <div className="glass-panel p-4 flex gap-2 flex-wrap">
+              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onUpload}/>
+              <button onClick={() => fileRef.current?.click()} className="btn-primary px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+                <Icon name="upload" size={16}/> Cargar catálogo (Excel)
+              </button>
+              <button onClick={onExport} disabled={!entries.length} className="btn-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
+                <Icon name="download" size={16}/> Exportar
+              </button>
+              <button onClick={onClear} disabled={!entries.length} className="bg-[#E3001B]/10 border border-[#E3001B]/30 text-[#E3001B] px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+                <Icon name="trash" size={16}/> Vaciar catálogo
+              </button>
+            </div>
+          ) : (
+            <div className="glass-panel p-4 flex gap-2 flex-wrap items-center justify-between">
+              <p className="text-sm text-[var(--text-muted)]">
+                🔒 Solo el <strong className="text-[var(--text-main)]">administrador</strong> puede cargar o modificar el catálogo. Puedes consultarlo aquí.
+              </p>
+              <button onClick={onExport} disabled={!entries.length} className="btn-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
+                <Icon name="download" size={16}/> Exportar
+              </button>
+            </div>
+          )}
+
+          <div className="glass-panel p-4">
+            <div className="relative">
+              <span className="absolute left-3 top-2.5 text-[var(--text-muted)]"><Icon name="search" size={16}/></span>
+              <input className="field pl-9" placeholder="Buscar por SKU o descripción..." value={search} onChange={e => setSearch(e.target.value)}/>
+            </div>
+          </div>
+
+          <div className="glass-panel overflow-hidden">
+            <div className="overflow-x-auto max-h-[600px]">
+              <table className="w-full">
+                <thead className="sticky top-0 bg-[var(--table-head-bg)] backdrop-blur-md z-10">
+                  <tr>
+                    <th className="text-left w-40">SKU</th>
+                    <th className="text-left">Descripción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.slice(0, 500).map(([sku, desc]) => (
+                    <tr key={sku}>
+                      <td className="font-bold text-[var(--text-main)]">{sku}</td>
+                      <td className="text-[var(--text-dark)]">{desc}</td>
+                    </tr>
+                  ))}
+                  {!filtered.length && (
+                    <tr><td colSpan="2" className="text-center py-10 text-[var(--text-muted)]">
+                      {entries.length ? "Sin coincidencias." : "Aún no se ha cargado un catálogo. El administrador debe subir un Excel con columnas 'SKU' y 'Descripción'."}
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {filtered.length > 500 && (
+              <div className="p-3 text-center text-xs text-[var(--text-muted)] border-t border-[var(--table-border)]">
+                Mostrando 500 de {filtered.length.toLocaleString('es-PE')}. Refina la búsqueda.
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    function RecordModal({ modal, onClose, onSave, catalog }) {
       const isPack = modal.view === "packs"; const isMaster = modal.view === "master"; const isCitas = modal.view === "citas";
       const dialog = useRef(null); const [error, setError] = useState("");
       const [form, setForm] = useState(() => {
@@ -854,10 +961,27 @@
 
       useEffect(() => { const prev = document.activeElement; const overflow = document.body.style.overflow; document.body.style.overflow = "hidden"; dialog.current.showModal(); return () => { document.body.style.overflow = overflow; prev?.focus?.(); }; }, []);
 
+      // Estado del SKU en el catálogo (solo para master)
+      const skuStatus = useMemo(() => {
+        if (!isMaster) return null;
+        const key = String(form.sku || "").trim().toUpperCase();
+        if (!key) return null;
+        return catalog[key]
+          ? { valid: true, description: catalog[key] }
+          : { valid: false };
+      }, [isMaster, form.sku, catalog]);
+
       function change(e) {
         const { name, value } = e.target;
         setForm(prev => {
           const next = { ...prev, [name]: value };
+          
+          // Autocompletar descripción en master desde el catálogo
+          if (isMaster && name === "sku") {
+            const key = String(value).trim().toUpperCase();
+            next.description = key && catalog[key] ? catalog[key] : "";
+          }
+
           if (isPack) {
             if (name === "proceeded") {
               next.status = value === "Sí" ? "Resuelta" : "Pendiente";
@@ -876,10 +1000,29 @@
 
       function submit(e) {
         e.preventDefault();
+
+        // Validación del catálogo antes que nada (solo master)
+        if (isMaster) {
+          const key = String(form.sku || "").trim().toUpperCase();
+          if (!key) return setError("El SKU es obligatorio.");
+          if (!catalog[key]) {
+            return setError(
+              `El SKU "${form.sku}" no existe en el catálogo de productos. ` +
+              `Verifica el código o pide al administrador que cargue el catálogo actualizado.`
+            );
+          }
+        }
+
         const required = isPack ? ["sku", "description", "user"] : isMaster ? ["sku", "description", "reason"] : isCitas ? ["supplier", "appointmentDate", "reportType", "description"] : ["supplier", "reason"];
         if (required.some(k => !String(form[k] || "").trim())) return setError("Completa todos los campos requeridos.");
         const cleaned = { ...form };
         required.forEach(k => cleaned[k] = String(form[k]).trim());
+
+        if (isMaster) {
+          cleaned.sku = String(form.sku).trim().toUpperCase();
+          cleaned.description = catalog[cleaned.sku]; // Descripción forzada del catálogo
+        }
+
         if (isPack) {
           const oldMP = Number(form.oldMP), newMP = Number(form.newMP);
           if (![oldMP, newMP].every(n => Number.isSafeInteger(n) && n > 0)) return setError("Los valores deben ser enteros positivos.");
@@ -922,8 +1065,43 @@
             <label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">Estado<select className="field mt-2" name="status" value={form.status} onChange={change}><option>Pendiente</option><option>Resuelta</option></select></label>
           </> : <>
             {field("Fecha de registro", "createdAt", "date", { max: dateKey() })}
-            {isMaster ? <>{field("SKU", "sku", {autoFocus:true})}{field("Descripción", "description")}<label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">Motivo<textarea className="field mt-2" rows="3" name="reason" required value={form.reason} onChange={change}/></label></> 
-            : isCitas ? <>{field("Proveedor", "supplier", {autoFocus:true})}{field("Fecha de la Cita", "appointmentDate", "date")}{field("Tipo de Reporte", "reportType")}<label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">Descripción<textarea className="field mt-2" rows="3" name="description" required value={form.description} onChange={change}/></label></>
+            {isMaster ? <>
+              <label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">
+                SKU
+                <div className="relative">
+                  <input
+                    className="field mt-2 pr-28"
+                    name="sku"
+                    type="text"
+                    value={form.sku ?? ""}
+                    onChange={change}
+                    required
+                    autoFocus
+                    placeholder="Ej: 100245"
+                  />
+                  {skuStatus && (
+                    <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold ${skuStatus.valid ? 'text-[#009640]' : 'text-[#E3001B]'}`}>
+                      {skuStatus.valid ? '✓ En catálogo' : '✗ No existe'}
+                    </span>
+                  )}
+                </div>
+              </label>
+
+              <label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">
+                Descripción <span className="text-[10px] text-[var(--text-muted)] font-normal">(auto desde el catálogo)</span>
+                <input
+                  className="field mt-2"
+                  name="description"
+                  type="text"
+                  value={form.description ?? ""}
+                  readOnly
+                  placeholder={skuStatus && !skuStatus.valid ? "SKU no encontrado" : "Se autocompletará al escribir el SKU"}
+                />
+              </label>
+
+              <label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">Motivo<textarea className="field mt-2" rows="3" name="reason" required value={form.reason} onChange={change}/></label>
+            </> 
+            : isCitas ? <>{field("Proveedor", "supplier", "text", {autoFocus:true})}{field("Fecha de la Cita", "appointmentDate", "date")}{field("Tipo de Reporte", "reportType")}<label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">Descripción<textarea className="field mt-2" rows="3" name="description" required value={form.description} onChange={change}/></label></>
             : <>
                 {field("Proveedor", "supplier", "text", {autoFocus:true})}
                 <label className="block text-sm font-semibold text-[var(--text-dark)] mb-4">Motivo
@@ -953,6 +1131,14 @@
       const [excelHistory, setExcelHistory] = useState([]); 
       const [isDbReady, setIsDbReady] = useState(false);
       const [dashboardData, setDashboardData] = useState(null);
+
+      // Catálogo de productos (SKU → Descripción) con caché localStorage
+      const [catalog, setCatalog] = useState(() => {
+        try {
+          const cache = localStorage.getItem('slotting_catalogo');
+          return cache ? JSON.parse(cache) : {};
+        } catch { return {}; }
+      });
 
       const { start: weekStart, end: weekEnd } = getWeekRange();
       const [search, setSearch] = useState(""); 
@@ -995,9 +1181,22 @@
             setExcelHistory([]);
           }
         });
+
+        const unsubCatalog = db.collection('slotting').doc(DB_DOC_CATALOG).onSnapshot(
+          doc => {
+            if (doc.exists) {
+              const products = doc.data().products || {};
+              setCatalog(products);
+              try { localStorage.setItem('slotting_catalogo', JSON.stringify(products)); } catch(e){}
+            } else {
+              setCatalog({});
+            }
+          },
+          err => console.warn('Catálogo no disponible:', err.message)
+        );
         
         setIsDbReady(true);
-        return () => { unsubData(); unsubHistory(); unsubExcel(); };
+        return () => { unsubData(); unsubHistory(); unsubExcel(); unsubCatalog(); };
       }, []);
 
       // Guardar en Firebase cuando cambia el estado
@@ -1092,7 +1291,7 @@
           incidents.push({
             id: uid("AG"), createdAt, supplier, 
             reason: "No generó su cita", 
-            observations: "", // <-- CAMBIO APLICADO: Se deja en blanco
+            observations: "",
             status: "Resuelta", resolvedAt: createdAt, 
             evidence: "Cierre automático", closureNote: "Registrado al guardar Dashboard"
           });
@@ -1112,6 +1311,84 @@
         setDashboardHistory(prev => { const next = { ...prev }; delete next[dateKey]; return next; });
         if (dashboardData && dashboardData.fecha === dateKey) setDashboardData(null);
         setNotice(`Reporte eliminado del historial.`);
+      }
+
+      /* ---------- CATÁLOGO: subir / vaciar / exportar ---------- */
+      async function handleCatalogUpload(event) {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (!isAdmin) { setNotice("Solo el administrador puede cargar el catálogo."); return; }
+        if (!file) return;
+        if (!window.XLSX) return setNotice("XLSX no disponible. Revisa tu conexión.");
+        try {
+          const buffer = await file.arrayBuffer();
+          const book = XLSX.read(buffer, { type: "array" });
+          const sheet = book.Sheets[book.SheetNames[0]];
+          const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false });
+
+          const products = {};
+          let skipped = 0;
+          rawRows.forEach(row => {
+            const sku = String(
+              row.SKU ?? row.sku ?? row.Codigo ?? row.codigo ??
+              row["Código"] ?? row["Codigo"] ?? row["CODIGO"] ?? row["SKU "] ?? ""
+            ).trim().toUpperCase();
+            const desc = String(
+              row.Descripción ?? row["Descripción"] ?? row.descripcion ??
+              row.Description ?? row.Producto ?? row.producto ?? row.Nombre ?? ""
+            ).trim();
+            if (sku && desc) products[sku] = desc;
+            else skipped++;
+          });
+
+          const total = Object.keys(products).length;
+          if (total === 0) return setNotice("No se detectaron columnas 'SKU' / 'Descripción'.");
+
+          const sizeBytes = new Blob([JSON.stringify(products)]).size;
+          if (sizeBytes > 950000) {
+            return setNotice(`Catálogo demasiado grande (${Math.round(sizeBytes/1024)} KB). Divídelo en dos archivos.`);
+          }
+
+          await db.collection('slotting').doc(DB_DOC_CATALOG).set({
+            products,
+            total,
+            fileName: file.name,
+            updatedAt: new Date().toISOString()
+          });
+          try { localStorage.setItem('slotting_catalogo', JSON.stringify(products)); } catch(e){}
+          setCatalog(products);
+          setNotice(`Catálogo cargado: ${total.toLocaleString('es-PE')} SKUs (${skipped} filas omitidas).`);
+        } catch (err) {
+          console.error(err);
+          setNotice("Error al procesar el archivo de catálogo.");
+        }
+      }
+
+      async function handleCatalogClear() {
+        if (!isAdmin) return setNotice("Solo el administrador puede vaciar el catálogo.");
+        if (!confirm("¿Vaciar todo el catálogo? Los usuarios no podrán registrar incidencias de master hasta subir uno nuevo.")) return;
+        try {
+          await db.collection('slotting').doc(DB_DOC_CATALOG).set({
+            products: {}, total: 0, updatedAt: new Date().toISOString()
+          });
+          try { localStorage.removeItem('slotting_catalogo'); } catch(e){}
+          setCatalog({});
+          setNotice("Catálogo vaciado.");
+        } catch (err) {
+          console.error(err);
+          setNotice("Error al vaciar el catálogo.");
+        }
+      }
+
+      function handleCatalogExport() {
+        if (!Object.keys(catalog).length) return;
+        if (!window.XLSX) return setNotice("XLSX no disponible.");
+        const rows = [["SKU", "Descripción"], ...Object.entries(catalog)];
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Catálogo");
+        XLSX.writeFile(wb, `Catalogo_Productos_${dateKey()}.xlsx`);
+        setNotice("Catálogo exportado.");
       }
 
       /* ---------- PROCESAR EXCEL DE DASHBOARD ---------- */
@@ -1453,6 +1730,14 @@
             {/* VISTA ESPECIAL: DASHBOARD DE CITAS */}
             {view === "resumen" ? (
               <ExecutiveSummary summary={executiveSummary} />
+            ) : view === "catalogo" ? (
+              <CatalogoView
+                catalog={catalog}
+                onUpload={handleCatalogUpload}
+                onClear={handleCatalogClear}
+                onExport={handleCatalogExport}
+                isAdmin={isAdmin}
+              />
             ) : view === "dashboardCitas" ? (
               <CitasDashboard 
                 data={dashboardData} 
@@ -1617,7 +1902,7 @@
           </main>
         </div>
 
-        {modal && <RecordModal modal={modal} onClose={() => setModal(null)} onSave={saveRecord}/>}
+        {modal && <RecordModal modal={modal} onClose={() => setModal(null)} onSave={saveRecord} catalog={catalog}/>}
       </div>;
     }
 
